@@ -151,10 +151,11 @@ local schema = {
 					},
 					{
 						extra_info = {
-							type = "record",
+							type = "map",
 							required = false,
 							description = "Additional metadata as key-value pairs",
-							fields = {},
+							keys = { type = "string" },
+							values = { type = "string" },
 							default = ngx.null,
 						},
 					},
