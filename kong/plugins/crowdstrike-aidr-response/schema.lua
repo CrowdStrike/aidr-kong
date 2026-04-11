@@ -1,7 +1,15 @@
 local typedefs = require("kong.db.schema.typedefs")
 local Schema = require("kong.db.schema")
 
-local translate = require("kong.plugins.crowdstrike-aidr-shared.aidr-translator")
+local AVAILABLE_TRANSLATORS = {
+	"anthropic",
+	"azureai",
+	"bedrock",
+	"cohere",
+	"gemini",
+	"kong",
+	"openai",
+}
 
 local secret = Schema.define {
 	type = "string",
@@ -45,7 +53,7 @@ local schema = {
 										type = "string",
 										required = true,
 										description = "Provider name used to translate the LLM request to CrowdStrike AIDR format, e.g. 'openai'",
-										one_of = translate.list_available_translators(),
+										one_of = AVAILABLE_TRANSLATORS,
 									},
 								},
 								{
@@ -57,31 +65,13 @@ local schema = {
 								},
 							},
 							custom_validator = function(value)
-								local instance, err = translate.get_translator(value.provider)
-								if err ~= nil then
-									return nil, err
+								-- api_uri validation against the translator is performed at runtime
+								-- in the handler, since the shared translator module is not available
+								-- at schema load time in Kong Konnect
+								if not value.provider or not value.api_uri then
+									return nil, "Both provider and api_uri are required"
 								end
-
-								local api_uri_transformers = instance[value.api_uri]
-								if api_uri_transformers ~= nil and value.api_uri ~= "capabilities" then
-									return true
-								end
-
-								local allowed_values = {}
-								local idx = 0
-								for k, _ in pairs(instance) do
-									if k ~= "capabilities" then
-										idx = idx + 1
-										allowed_values[idx] = k
-									end
-								end
-
-								return nil,
-									string.format(
-										"For provider '%s' allowed api_uris are '%s'",
-										value.provider,
-										table.concat(allowed_values, ", ")
-									)
+								return true
 							end,
 						},
 					},
