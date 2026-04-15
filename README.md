@@ -423,6 +423,63 @@ vaults:
 
 You can now run Kong AI Gateway with this configuration using the same Docker image and command shown in the [earlier Docker-based example](#example-of-use-with-kong-gateway-deployed-in-docker). Just replace the configuration file with the one shown above.
 
+
+### Example with ai-proxy-advanced
+
+[Back to Contents](#contents)
+
+The CrowdStrike AIDR plugins also work with `ai-proxy-advanced`, which provides advanced routing features like load balancing, failover, and multiple targets.
+
+Below is an example configuration using `ai-proxy-advanced`:
+
+```yaml
+_format_version: "3.0"
+services:
+  - name: openai-service
+    url: https://api.openai.com
+    routes:
+      - name: openai-route
+        paths: ["/openai"]
+    plugins:
+      - name: ai-proxy-advanced
+        config:
+          targets:
+            - route_type: "llm/v1/chat"
+              auth:
+                header_name: Authorization
+                header_value: "{vault://env-openai/key}"
+              model:
+                provider: openai
+                name: gpt-4o-mini
+      - name: crowdstrike-aidr-request
+        config:
+          ai_guard_api_key: "{vault://env-cs-aidr/token}"
+          ai_guard_api_base_url: "https://api.crowdstrike.com/aidr/aiguard"
+          upstream_llm:
+            provider: "kong"
+            api_uri: "/llm/v1/chat"
+          llm_provider: "OpenAI"
+          model: "gpt-4o-mini"
+      - name: crowdstrike-aidr-response
+        config:
+          ai_guard_api_key: "{vault://env-cs-aidr/token}"
+          ai_guard_api_base_url: "https://api.crowdstrike.com/aidr/aiguard"
+          upstream_llm:
+            provider: "kong"
+            api_uri: "/llm/v1/chat"
+          llm_provider: "OpenAI"
+          model: "gpt-4o-mini"
+vaults:
+  - name: env
+    prefix: env-cs-aidr
+    config:
+      prefix: "CS_AIDR_"
+  - name: env
+    prefix: env-openai
+    config:
+      prefix: "OPENAI_"
+```
+
 ## Example of use with Kong AI Gateway in DB mode
 
 [Back to Contents](#contents)

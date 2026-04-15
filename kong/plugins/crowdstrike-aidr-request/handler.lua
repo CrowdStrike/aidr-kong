@@ -3,7 +3,7 @@ local kong_utils = require("kong.tools.gzip")
 
 -- Plugin class
 local CrowdStrikeAIDRRequestHandler = {
-	-- Need to run BEFORE ai-proxy
+	-- Need to run BEFORE ai-proxy / ai-proxy-advanced
 	PRIORITY = 780,
 	VERSION = "0.2.0",
 }

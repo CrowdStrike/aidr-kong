@@ -77,6 +77,11 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
 		return exit_fn(500, internalError)
 	end
 
+	-- Debug: Log the request being sent to AIDR
+	-- Method: httpc:request_uri() (lua-resty-http library)
+    -- Context: Called from response handler's access phase when trying to inspect LLM response
+    -- Error: API disabled in the context of body_filter_by_lua*
+	kong.log.debug("AIDR request payload: " .. raw_ai_guard_request_body)
 
 	local httpc = http.new()
 	local res, err = httpc:request_uri(url, {
@@ -87,6 +92,10 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
 			["Content-Type"] = "application/json",
 		},
 	})
+	-- The response handler runs in access phase
+    -- Makes manual upstream request to get response body
+    -- Tries to call AIDR API with httpc:request_uri()
+    -- Cosocket operations are blocked in this context
 
 	if err then
 		kong.log.err("Error making request to CrowdStrike AIDR: " .. err)
@@ -103,6 +112,9 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
 		kong.log.err("Error decoding CrowdStrike AIDR response: " .. err)
 		return exit_fn(500, internalError)
 	end
+
+	-- Debug: Log the AIDR response
+	kong.log.debug("AIDR response: " .. res.body)
 
 	if response.result.blocked then
 		local message = {

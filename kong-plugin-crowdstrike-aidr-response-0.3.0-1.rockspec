@@ -1,4 +1,4 @@
-local package_version = "0.2.0"
+local package_version = "0.3.0"
 local rockspec_revision = "1"
 
 package = "kong-plugin-crowdstrike-aidr-response"
@@ -9,16 +9,17 @@ source = {
 }
 
 description = {
-	summary = "Kong Gateway plugin to integrate CrowdStrike AIDR",
+	summary = "Kong Gateway plugin to integrate CrowdStrike AIDR for response inspection",
 	detailed = [[
-		kong-plugin-crowdstrike-aidr-response is able to pass proxied LLM requests to CrowdStrike AIDR.
-		It will respect the AIDR when determining which actions to take, meaning it may decide to
-		completely block any content, or it may redact content before passing it to the consumer.
-		It does not need Kong AI Proxy or Kong AI Gateway to be configured, but it can work in
-		conjunction with it.
+		kong-plugin-crowdstrike-aidr-response inspects LLM responses for PII and sensitive content.
+		It works with Kong AI Gateway (ai-proxy/ai-proxy-advanced) to inspect and optionally redact
+		responses before they reach the client.
 
-		As a compatability note with other plugins, this "shortcircuits" the request in the access() phase,
-		the result being that any other plugin which works in the access() phase after this one will be skipped.
+		The plugin uses Kong's response phase to buffer and inspect the complete response,
+		then calls CrowdStrike AIDR for PII detection and redaction.
+
+		This plugin is compatible with Kong AI Gateway plugins and does not interfere with
+		their routing, load balancing, or failover features.
 	]],
 	homepage = "https://github.com/crowdstrike/aidr-kong",
 	license = "MIT",
