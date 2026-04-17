@@ -11,7 +11,7 @@ local ai_guard = require("kong.plugins.crowdstrike-aidr-shared.ai_guard")
 local CrowdStrikeAIDRResponseHandler = {
 	-- Set priority low so that this runs after ai-proxy (and our request handler)
 	PRIORITY = 760,
-	VERSION = "0.2.0",
+	VERSION = "0.2.1",
 }
 
 local function get_ai_proxy_config()
