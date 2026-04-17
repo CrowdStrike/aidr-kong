@@ -5,7 +5,7 @@ local kong_utils = require("kong.tools.gzip")
 local CrowdStrikeAIDRRequestHandler = {
 	-- Need to run BEFORE ai-proxy
 	PRIORITY = 780,
-	VERSION = "0.2.0",
+	VERSION = "0.2.1",
 }
 
 local function get_raw_body()

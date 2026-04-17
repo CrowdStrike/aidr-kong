@@ -1,4 +1,4 @@
-local package_version = "0.2.0"
+local package_version = "0.2.1"
 local rockspec_revision = "1"
 
 package = "kong-plugin-crowdstrike-aidr-shared"
