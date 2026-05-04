@@ -5,7 +5,7 @@ local ai_guard = require("kong.plugins.crowdstrike-aidr-shared.ai_guard")
 -- Plugin class
 local CrowdStrikeAIDRResponseHandler = {
 	PRIORITY = 760,
-	VERSION = "0.2.1",
+	VERSION = "0.3.0",
 }
 
 function CrowdStrikeAIDRResponseHandler:access(config)
