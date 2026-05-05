@@ -19,8 +19,15 @@ local function get_raw_body()
 end
 
 function CrowdStrikeAIDRRequestHandler:access(config)
-	-- local log_fields = ai_guard.get_log_fields(config)
+	local method = kong.request.get_method()
+	if method ~= "POST" and method ~= "PUT" and method ~= "PATCH" then
+		return
+	end
+
 	local raw_body = get_raw_body()
+	if raw_body == nil or raw_body == "" then
+		return
+	end
 
 	local new_payload = ai_guard.run_ai_guard(config, "request", raw_body)
 	if new_payload ~= nil then
