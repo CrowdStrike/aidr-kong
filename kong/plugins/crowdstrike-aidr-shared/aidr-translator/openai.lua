@@ -12,11 +12,6 @@ local function prepare_chat_completions_request(request)
 		return nil, "Invalid llm request"
 	end
 
-	local streaming = request.stream
-	if streaming then
-		return nil, "Streaming responses are not supported"
-	end
-
 	local ret = Model.NewJSONMessageMap()
 
 	for idx, message in ipairs(request.messages) do
@@ -66,11 +61,6 @@ end
 local function prepare_completions_request(request)
 	if type(request) ~= "table" then
 		return nil, "Invalid llm request"
-	end
-
-	local streaming = request.stream
-	if streaming then
-		return nil, "Streaming responses are not supported"
 	end
 
 	local ret = Model.NewJSONMessageMap()
