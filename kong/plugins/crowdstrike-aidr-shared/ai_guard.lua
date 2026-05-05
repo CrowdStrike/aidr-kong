@@ -33,13 +33,15 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
 		return exit_fn(500, internalError)
 	end
 
-	local transformer = translator_instance[config.upstream_llm.api_uri]
+	-- Trim any whitespace that the user may have accidentally included.
+	local api_uri = config.upstream_llm.api_uri:gsub("^%s+", ""):gsub("%s+$", "")
+	local transformer = translator_instance[api_uri]
 	if transformer == nil then
 		kong.log.debug(
 			string.format(
 				"Could not find transformer for provider '%s' for upstream uri '%s'",
 				config.upstream_llm.provider,
-				config.upstream_llm.api_uri
+				api_uri
 			)
 		)
 		return exit_fn(500, internalError)
@@ -210,7 +212,7 @@ function AIGuard.get_aidr_fields(config, mode)
   -- Build extra_info object
   local service = kong.router.get_service()
   body.extra_info = {}
-  
+
   if service and service.name then
     body.extra_info.app_name = service.name
   end
