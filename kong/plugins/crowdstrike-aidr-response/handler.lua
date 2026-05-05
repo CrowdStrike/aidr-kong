@@ -21,6 +21,15 @@ function CrowdStrikeAIDRResponseHandler:response(config)
 		return kong.response.exit(status, raw_body, headers)
 	end
 
+	-- Streaming responses are not supported.
+	local content_type = string.lower(headers["Content-Type"] or headers["content-type"] or "")
+	local is_streaming = string.find(content_type, "text/event-stream", 1, true)
+		or string.find(content_type, "application/vnd.amazon.eventstream", 1, true)
+	if is_streaming then
+		kong.log.debug("Streaming response detected, skipping AIDR")
+		return kong.response.exit(status, raw_body, headers)
+	end
+
 	local encoding = headers["Content-Encoding"]
 	if encoding == "gzip" then
 		raw_body = kong_utils.inflate_gzip(raw_body)
