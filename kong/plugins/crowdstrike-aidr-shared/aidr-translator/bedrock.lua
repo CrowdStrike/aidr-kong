@@ -32,15 +32,19 @@ local function prepare_converse_response(response)
 		return nil, "Invalid response object"
 	end
 
+	-- The Bedrock Converse API returns output as an object: {message: {role, content[]}}
+	if type(response.output) ~= "table" or type(response.output.message) ~= "table" then
+		return nil, "Invalid response object"
+	end
+
 	local ret = Model.NewJSONMessageMap()
 
-	for idx, message in ipairs(response.output) do
-		local role = message.role
-		for jdx, content in ipairs(message.content) do
-			local text = content.text
-			if text ~= nil then
-				ret:add_message(text, role, { "output", idx, "content", jdx, "text" })
-			end
+	local message = response.output.message
+	local role = message.role
+	for jdx, content in ipairs(message.content) do
+		local text = content.text
+		if text ~= nil then
+			ret:add_message(text, role, { "output", "message", "content", jdx, "text" })
 		end
 	end
 
