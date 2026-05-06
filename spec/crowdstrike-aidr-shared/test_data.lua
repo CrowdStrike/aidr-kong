@@ -299,6 +299,87 @@ return {
 			},
 		},
 	},
+	-- kong provider: /llm/v1/chat request (identical format to OpenAI)
+	{
+		provider = "kong",
+		api = "/llm/v1/chat",
+		type = "request",
+		body = {
+			model = "gpt-4o-mini",
+			messages = {
+				{ role = "system", content = "System Message 1" },
+				{ role = "user", content = "User Message 1" },
+			},
+		},
+		transformed_body = {
+			model = "gpt-4o-mini",
+			messages = {
+				{ role = "system", content = "Transformed System Message 1" },
+				{ role = "user", content = "Transformed User Message 1" },
+			},
+		},
+	},
+	-- kong provider: /llm/v1/chat response — OpenAI upstream (object == "chat.completion")
+	-- This is the only response path unit-testable without a live ngx.ctx.
+	-- Anthropic and Bedrock upstream paths require Kong's ai-proxy context at
+	-- runtime and are covered by integration tests only.
+	{
+		provider = "kong",
+		api = "/llm/v1/chat",
+		type = "response",
+		body = {
+			id = "chatcmpl-test",
+			object = "chat.completion",
+			choices = {
+				{
+					index = 0,
+					finish_reason = "stop",
+					message = { role = "assistant", content = "Assistant Message 1" },
+				},
+			},
+		},
+		transformed_body = {
+			id = "chatcmpl-test",
+			object = "chat.completion",
+			choices = {
+				{
+					index = 0,
+					finish_reason = "stop",
+					message = { role = "assistant", content = "Transformed Assistant Message 1" },
+				},
+			},
+		},
+	},
+	{
+		provider = "bedrock",
+		api = "converse",
+		type = "response",
+		-- Bedrock Converse API: output is an object {message: {role, content[]}}
+		body = {
+			output = {
+				message = {
+					role = "assistant",
+					content = {
+						{ text = "Assistant Message 1" },
+						{ text = "Assistant Message 2" },
+					},
+				},
+			},
+			stopReason = "end_turn",
+		},
+		transformed_body = {
+			output = {
+				message = {
+					role = "assistant",
+					content = {
+						{ text = "Transformed Assistant Message 1" },
+						{ text = "Transformed Assistant Message 2" },
+					},
+				},
+			},
+			stopReason = "end_turn",
+		},
+	},
 	{
 		provider = "cohere",
 		api = "/v2/chat",
