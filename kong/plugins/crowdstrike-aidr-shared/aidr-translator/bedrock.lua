@@ -40,7 +40,7 @@ local function prepare_converse_response(response)
 	local ret = Model.NewJSONMessageMap()
 
 	local message = response.output.message
-	local role = message.role
+	local role = message.role or "assistant"
 	for jdx, content in ipairs(message.content) do
 		local text = content.text
 		if text ~= nil then
