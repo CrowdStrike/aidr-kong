@@ -87,7 +87,7 @@ local schema = {
 						user_id = {
 							type = "string",
 							required = false,
-							description = "User/Service account id/service account",
+							description = "Static fallback user ID if an authenticated one is not available",
 							default = ngx.null,
 						},
 					},

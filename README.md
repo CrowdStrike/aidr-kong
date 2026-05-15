@@ -96,7 +96,7 @@ Both plugins accept the following configuration parameters:
     - `openai` - OpenAI
   - **api_uri** _(string, required)_ - Path to the LLM endpoint (for example, `/v1/chat/completions`)
 - **app_id** _(string, optional)_ - Id of source application/agent
-- **user_id** _(string, optional)_ - User/Service account id/service account
+- **user_id** _(string, optional)_ - Static fallback user ID if an authenticated one is not available
 - **llm_provider** _(string, optional)_ - Underlying LLM provider name (e.g. 'OpenAI', 'Anthropic')
 - **model** _(string, optional)_ - Model used to perform the event (e.g. 'gpt-4')
 - **model_version** _(string, optional)_ - Model version used to perform the event (e.g. '4')
