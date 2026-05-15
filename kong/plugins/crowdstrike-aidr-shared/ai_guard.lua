@@ -8,6 +8,25 @@ local internalError = {
 
 local AIGuard = {}
 
+local function resolve_user_id(config)
+  local consumer = kong.client.get_consumer()
+  if consumer then
+    if consumer.username then
+      return consumer.username
+    end
+    if consumer.custom_id then
+      return consumer.custom_id
+    end
+  end
+
+  local credential = kong.client.get_credential()
+  if credential then
+    return credential.id
+  end
+
+  return config.user_id
+end
+
 
 ---@alias mode "request" | "response"
 
@@ -169,8 +188,9 @@ function AIGuard.get_aidr_fields(config, mode)
     body.app_id = config.app_id
   end
 
-  if config.user_id then
-    body.user_id = config.user_id
+  local user_id = resolve_user_id(config)
+  if user_id then
+    body.user_id = user_id
   end
 
   if config.llm_provider then
