@@ -31,16 +31,21 @@ function translate.rewrite_llm_message(original, message_mapping, new_messages)
 
 	for idx, prompt_message in ipairs(new_messages) do
 		local this_message_lookup = message_mapping.lookup[idx]
-		local content = original
+		if this_message_lookup == nil then
+			-- No rewrite path: context-only message (e.g. assistant tool_calls).
+			-- Leave the original body untouched at this position.
+		else
+			local content = original
 
-		-- Remove the last part, so we can directly assign it
-		local last_part = table.remove(this_message_lookup)
-		for _, part in ipairs(this_message_lookup) do
-			content = content[part]
-		end
-		if content[last_part] ~= prompt_message.content then
-			content[last_part] = prompt_message.content
-			updated = true
+			-- Remove the last part, so we can directly assign it
+			local last_part = table.remove(this_message_lookup)
+			for _, part in ipairs(this_message_lookup) do
+				content = content[part]
+			end
+			if content[last_part] ~= prompt_message.content then
+				content[last_part] = prompt_message.content
+				updated = true
+			end
 		end
 	end
 
