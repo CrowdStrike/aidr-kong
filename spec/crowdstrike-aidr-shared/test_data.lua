@@ -60,6 +60,72 @@ return {
 			},
 		},
 	},
+	-- OpenAI request with tools: verify tools are extracted and passed to AIDR
+	{
+		provider = "openai",
+		api = "/v1/chat/completions",
+		type = "request",
+		body = {
+			model = "gpt-4",
+			messages = {
+				{ role = "user", content = "What is the weather in Paris?" },
+			},
+			tools = {
+				{
+					type = "function",
+					["function"] = {
+						name = "get_weather",
+						description = "Get current weather for a location.",
+						parameters = {
+							type = "object",
+							properties = {
+								location = { type = "string" },
+							},
+							required = { "location" },
+						},
+					},
+				},
+			},
+		},
+		transformed_body = {
+			model = "gpt-4",
+			messages = {
+				{ role = "user", content = "Transformed What is the weather in Paris?" },
+			},
+			tools = {
+				{
+					type = "function",
+					["function"] = {
+						name = "get_weather",
+						description = "Get current weather for a location.",
+						parameters = {
+							type = "object",
+							properties = {
+								location = { type = "string" },
+							},
+							required = { "location" },
+						},
+					},
+				},
+			},
+		},
+		expected_tools = {
+			{
+				type = "function",
+				["function"] = {
+					name = "get_weather",
+					description = "Get current weather for a location.",
+					parameters = {
+						type = "object",
+						properties = {
+							location = { type = "string" },
+						},
+						required = { "location" },
+					},
+				},
+			},
+		},
+	},
 	{
 		provider = "openai",
 		api = "/v1/chat/completions",
@@ -190,6 +256,66 @@ return {
 				{
 					role = "assistant",
 					content = "Transformed Assistant Message 1",
+				},
+			},
+		},
+	},
+	-- Anthropic request with tools: verify conversion to AIDR/OpenAI format
+	{
+		provider = "anthropic",
+		api = "/v1/messages",
+		type = "request",
+		body = {
+			system = "System Message 1",
+			messages = {
+				{ role = "user", content = "What is the weather in Paris?" },
+			},
+			tools = {
+				{
+					name = "get_weather",
+					description = "Get current weather for a location.",
+					input_schema = {
+						type = "object",
+						properties = {
+							location = { type = "string" },
+						},
+						required = { "location" },
+					},
+				},
+			},
+		},
+		transformed_body = {
+			system = "Transformed System Message 1",
+			messages = {
+				{ role = "user", content = "Transformed What is the weather in Paris?" },
+			},
+			tools = {
+				{
+					name = "get_weather",
+					description = "Get current weather for a location.",
+					input_schema = {
+						type = "object",
+						properties = {
+							location = { type = "string" },
+						},
+						required = { "location" },
+					},
+				},
+			},
+		},
+		expected_tools = {
+			{
+				type = "function",
+				["function"] = {
+					name = "get_weather",
+					description = "Get current weather for a location.",
+					parameters = {
+						type = "object",
+						properties = {
+							location = { type = "string" },
+						},
+						required = { "location" },
+					},
 				},
 			},
 		},
@@ -412,6 +538,120 @@ return {
 						type = "text",
 						role = "assistant",
 						text = "Transformed Assistant Message 2",
+					},
+				},
+			},
+		},
+	},
+	-- OpenAI multi-turn: assistant tool_calls (no content) + tool result
+	-- Verifies: assistant tool_calls message is preserved unchanged (nil lookup),
+	-- and tool result string content is rewritten.
+	{
+		provider = "openai",
+		api = "/v1/chat/completions",
+		type = "request",
+		body = {
+			model = "gpt-4",
+			messages = {
+				{ role = "user", content = "What is the weather in Paris?" },
+				{
+					role = "assistant",
+					tool_calls = {
+						{
+							id = "call_abc123",
+							type = "function",
+							["function"] = { name = "get_weather", arguments = '{"location":"Paris"}' },
+						},
+					},
+				},
+				{
+					role = "tool",
+					tool_call_id = "call_abc123",
+					content = "The weather in Paris is 18°C and sunny.",
+				},
+				{ role = "user", content = "Thanks!" },
+			},
+		},
+		-- Custom transform: skip nil-content messages (assistant tool_calls)
+		transform_fn = function(message)
+			if message.content == nil then
+				return { role = message.role, content = nil }
+			end
+			return { role = message.role, content = "Transformed " .. message.content }
+		end,
+		transformed_body = {
+			model = "gpt-4",
+			messages = {
+				{ role = "user", content = "Transformed What is the weather in Paris?" },
+				-- assistant tool_calls: unchanged (nil lookup skips rewrite)
+				{
+					role = "assistant",
+					tool_calls = {
+						{
+							id = "call_abc123",
+							type = "function",
+							["function"] = { name = "get_weather", arguments = '{"location":"Paris"}' },
+						},
+					},
+				},
+				{
+					role = "tool",
+					tool_call_id = "call_abc123",
+					content = "Transformed The weather in Paris is 18°C and sunny.",
+				},
+				{ role = "user", content = "Transformed Thanks!" },
+			},
+		},
+	},
+	-- Anthropic multi-turn: tool_result content block (string form)
+	-- Verifies: tool_result.content is extracted and rewritten by AIDR.
+	{
+		provider = "anthropic",
+		api = "/v1/messages",
+		type = "request",
+		body = {
+			system = "You are a weather assistant.",
+			messages = {
+				{ role = "user", content = "What is the weather in Paris?" },
+				{
+					role = "assistant",
+					content = {
+						{ type = "text", text = "Let me check." },
+						{ type = "tool_use", id = "toolu_abc", name = "get_weather", input = { location = "Paris" } },
+					},
+				},
+				{
+					role = "user",
+					content = {
+						{
+							type = "tool_result",
+							tool_use_id = "toolu_abc",
+							content = "The weather in Paris is 18°C and sunny.",
+						},
+					},
+				},
+			},
+		},
+		transformed_body = {
+			system = "Transformed You are a weather assistant.",
+			messages = {
+				{ role = "user", content = "Transformed What is the weather in Paris?" },
+				{
+					role = "assistant",
+					content = {
+						{ type = "text", text = "Transformed Let me check." },
+						-- tool_use block: unchanged (no text content)
+						{ type = "tool_use", id = "toolu_abc", name = "get_weather", input = { location = "Paris" } },
+					},
+				},
+				{
+					role = "user",
+					content = {
+						{
+							type = "tool_result",
+							tool_use_id = "toolu_abc",
+							content = "Transformed The weather in Paris is 18°C and sunny.",
+						},
 					},
 				},
 			},

@@ -45,6 +45,10 @@ for _, strategy in helpers.each_strategy() do
 						translate.rewrite_llm_message(original_body, messages, transformed_messages)
 					assert.is_true(updated)
 					assert.are.same(test_input.transformed_body, new_body)
+
+					if test_input.expected_tools then
+						assert.are.same(test_input.expected_tools, messages.tools)
+					end
 				end)
 			end
 		end)

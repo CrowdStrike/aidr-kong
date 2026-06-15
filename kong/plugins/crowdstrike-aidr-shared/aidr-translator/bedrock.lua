@@ -1,5 +1,27 @@
 local Model = require("kong.plugins.crowdstrike-aidr-shared.aidr-translator.model")
 
+-- Convert Bedrock toolSpec definitions to AIDR/OpenAI format.
+-- Bedrock: { toolSpec = { name, description, inputSchema = { json = {...} } } }
+-- AIDR:    { type = "function", function = { name, description, parameters } }
+local function convert_tools(bedrock_tools)
+	local tools = {}
+	for _, tool in ipairs(bedrock_tools) do
+		local spec = type(tool) == "table" and tool.toolSpec
+		if spec and type(spec.name) == "string" then
+			local parameters = spec.inputSchema and spec.inputSchema.json
+			table.insert(tools, {
+				type = "function",
+				["function"] = {
+					name = spec.name,
+					description = spec.description,
+					parameters = parameters,
+				},
+			})
+		end
+	end
+	return tools
+end
+
 local function prepare_converse_request(request)
 	if type(request) ~= "table" then
 		return nil, "Invalid llm request"
@@ -22,6 +44,12 @@ local function prepare_converse_request(request)
 				ret:add_message(text, role, { "messages", idx, "content", jdx, "text" })
 			end
 		end
+	end
+
+	-- Convert Bedrock tool definitions to AIDR/OpenAI format
+	local tool_config = request.toolConfig
+	if type(tool_config) == "table" and type(tool_config.tools) == "table" and #tool_config.tools > 0 then
+		ret.tools = convert_tools(tool_config.tools)
 	end
 
 	return ret

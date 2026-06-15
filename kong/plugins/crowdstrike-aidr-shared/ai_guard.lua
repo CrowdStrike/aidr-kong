@@ -91,6 +91,9 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
   ai_guard_request_body = AIGuard.get_aidr_fields(config, mode)
   ai_guard_request_body.guard_input = {}
   ai_guard_request_body.guard_input.messages = messages.messages
+  if messages.tools and #messages.tools > 0 then
+    ai_guard_request_body.guard_input.tools = messages.tools
+  end
 
 	local raw_ai_guard_request_body, err = cjson.encode(ai_guard_request_body)
 	if err then
@@ -122,6 +125,11 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
 	local response, err = cjson.decode(res.body)
 	if err then
 		kong.log.err("Error decoding CrowdStrike AIDR response: " .. err)
+		return exit_fn(500, internalError)
+	end
+
+	if type(response.result) ~= "table" then
+		kong.log.err("CrowdStrike AIDR response missing or invalid result field")
 		return exit_fn(500, internalError)
 	end
 
@@ -184,16 +192,16 @@ function AIGuard.get_aidr_fields(config, mode)
   body.event_type = mode == "request" and "input" or "output"
 
   -- Optional fields from config
-  if config.app_id then
+  if config.app_id and config.app_id ~= ngx.null then
     body.app_id = config.app_id
   end
 
   local user_id = resolve_user_id(config)
-  if user_id then
+  if user_id and user_id ~= ngx.null then
     body.user_id = user_id
   end
 
-  if config.llm_provider then
+  if config.llm_provider and config.llm_provider ~= ngx.null then
     body.llm_provider = config.llm_provider
   elseif config.upstream_llm and config.upstream_llm.provider then
     -- Map provider name to a more standard format
@@ -209,23 +217,23 @@ function AIGuard.get_aidr_fields(config, mode)
     body.llm_provider = provider_map[config.upstream_llm.provider] or config.upstream_llm.provider
   end
 
-  if config.model then
+  if config.model and config.model ~= ngx.null then
     body.model = config.model
   end
 
-  if config.model_version then
+  if config.model_version and config.model_version ~= ngx.null then
     body.model_version = config.model_version
   end
 
-  if config.source_location then
+  if config.source_location and config.source_location ~= ngx.null then
     body.source_location = config.source_location
   end
 
-  if config.tenant_id then
+  if config.tenant_id and config.tenant_id ~= ngx.null then
     body.tenant_id = config.tenant_id
   end
 
-  if config.collector_instance_id then
+  if config.collector_instance_id and config.collector_instance_id ~= ngx.null then
     body.collector_instance_id = config.collector_instance_id
   end
 
@@ -237,7 +245,7 @@ function AIGuard.get_aidr_fields(config, mode)
     body.extra_info.app_name = service.name
   end
 
-  if config.extra_info then
+  if config.extra_info and config.extra_info ~= ngx.null then
     -- Merge any additional extra_info from config
     for k, v in pairs(config.extra_info) do
       body.extra_info[k] = v

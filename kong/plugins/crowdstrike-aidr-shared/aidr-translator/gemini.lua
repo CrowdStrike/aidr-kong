@@ -1,5 +1,30 @@
 local Model = require("kong.plugins.crowdstrike-aidr-shared.aidr-translator.model")
 
+-- Convert Gemini tool definitions to AIDR/OpenAI format.
+-- Gemini nests functions inside tool groups: tools[].functionDeclarations[].
+-- AIDR:  { type = "function", function = { name, description, parameters } }
+local function convert_tools(gemini_tools)
+	local tools = {}
+	for _, tool_group in ipairs(gemini_tools) do
+		local decls = type(tool_group) == "table" and tool_group.functionDeclarations
+		if type(decls) == "table" then
+			for _, decl in ipairs(decls) do
+				if type(decl) == "table" and type(decl.name) == "string" then
+					table.insert(tools, {
+						type = "function",
+						["function"] = {
+							name = decl.name,
+							description = decl.description,
+							parameters = decl.parameters,
+						},
+					})
+				end
+			end
+		end
+	end
+	return tools
+end
+
 local role_transform = {
 	["model"] = Model.AidrRoles.PromptRoleLlm,
 
@@ -32,6 +57,14 @@ local function prepare_chat_completions_request(request)
 			if text ~= nil then
 				ret:add_message(text, role, { "contents", idx, "parts", jdx, "text" })
 			end
+		end
+	end
+
+	-- Convert Gemini tool definitions to AIDR/OpenAI format
+	if type(request.tools) == "table" and #request.tools > 0 then
+		local tools = convert_tools(request.tools)
+		if #tools > 0 then
+			ret.tools = tools
 		end
 	end
 

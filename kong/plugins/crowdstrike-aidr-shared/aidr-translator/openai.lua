@@ -28,7 +28,17 @@ local function prepare_chat_completions_request(request)
 					ret:add_message(part.text, role, { "messages", idx, "content", jdx, "text" })
 				end
 			end
+		elseif content == nil and type(message.tool_calls) == "table" then
+			-- Assistant message with tool calls but no text content.
+			-- Add as a context-only entry (nil lookup) so AIDR sees the conversation
+			-- boundary; the tool_calls array in the original body is left untouched.
+			ret:add_message(nil, "assistant", nil)
 		end
+	end
+
+	-- Pass tools through as-is; they are already in AIDR/OpenAI format
+	if type(request.tools) == "table" and #request.tools > 0 then
+		ret.tools = request.tools
 	end
 
 	return ret

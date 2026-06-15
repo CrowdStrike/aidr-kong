@@ -39,6 +39,7 @@ end
 local JSONMessageMap = {
 	messages = {},
 	lookup = {},
+	tools = nil, -- Optional: array of tool definitions in AIDR/OpenAI format
 }
 
 ---@alias PathElement string | integer
@@ -73,6 +74,7 @@ local function NewJSONMessageMap()
 	local self = {
 		messages = {},
 		lookup = {},
+		tools = nil,
 	}
 	setmetatable(self, { __index = JSONMessageMap })
 	return self
