@@ -425,7 +425,50 @@ return {
 			},
 		},
 	},
-	-- kong provider: /llm/v1/chat request (identical format to OpenAI)
+	-- Bedrock request with toolResult: verify tool output text is extracted and rewritten
+	{
+		provider = "bedrock",
+		api = "converse",
+		type = "request",
+		body = {
+			system = { { text = "You are a weather assistant." } },
+			messages = {
+				{ role = "user",      content = { { text = "What is the weather in Paris?" } } },
+				{ role = "assistant", content = { { text = "Let me check." } } },
+				{
+					role = "user",
+					content = {
+						{
+							toolResult = {
+								toolUseId = "tool_1",
+								content = { { text = "The weather in Paris is 18°C and sunny." } },
+								status = "success",
+							},
+						},
+					},
+				},
+			},
+		},
+		transformed_body = {
+			system = { { text = "Transformed You are a weather assistant." } },
+			messages = {
+				{ role = "user",      content = { { text = "Transformed What is the weather in Paris?" } } },
+				{ role = "assistant", content = { { text = "Transformed Let me check." } } },
+				{
+					role = "user",
+					content = {
+						{
+							toolResult = {
+								toolUseId = "tool_1",
+								content = { { text = "Transformed The weather in Paris is 18°C and sunny." } },
+								status = "success",
+							},
+						},
+					},
+				},
+			},
+		},
+	},
 	{
 		provider = "kong",
 		api = "/llm/v1/chat",

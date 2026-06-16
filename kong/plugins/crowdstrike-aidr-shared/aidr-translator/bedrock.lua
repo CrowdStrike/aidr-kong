@@ -42,6 +42,17 @@ local function prepare_converse_request(request)
 			local text = content.text
 			if text ~= nil then
 				ret:add_message(text, role, { "messages", idx, "content", jdx, "text" })
+			elseif type(content.toolResult) == "table" then
+				-- Tool execution output — may contain PII or injected content.
+				local tool_result = content.toolResult
+				if type(tool_result.content) == "table" then
+					for kdx, block in ipairs(tool_result.content) do
+						if type(block.text) == "string" then
+							ret:add_message(block.text, role,
+								{ "messages", idx, "content", jdx, "toolResult", "content", kdx, "text" })
+						end
+					end
+				end
 			end
 		end
 	end
