@@ -24,6 +24,8 @@ All detections are logged for analysis, attribution, and incident response.
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Plugin configuration reference](#plugin-configuration-reference)
+  - [LLM plugins (crowdstrike-aidr-request and crowdstrike-aidr-response)](#llm-plugins-crowdstrike-aidr-request-and-crowdstrike-aidr-response)
+  - [MCP plugin (crowdstrike-aidr-mcp)](#mcp-plugin-crowdstrike-aidr-mcp)
 - [Example of use with Kong Gateway deployed in Docker](#example-of-use-with-kong-gateway-deployed-in-docker)
   - [Build image](#build-image)
   - [Add declarative configuration](#add-declarative-configuration)
@@ -35,6 +37,9 @@ All detections are logged for analysis, attribution, and incident response.
 - [Example of use with Kong AI Gateway in DB mode](#example-of-use-with-kong-ai-gateway-in-db-mode)
   - [Run Kong AI Gateway in Docker Compose](#run-kong-ai-gateway-in-docker-compose)
   - [Add configuration using the Admin API](#add-configuration-using-the-admin-api)
+- [Example of use with MCP servers](#example-of-use-with-mcp-servers)
+  - [MCP declarative configuration](#mcp-declarative-configuration)
+  - [Test MCP traffic inspection](#test-mcp-traffic-inspection)
 - [LLM support](#llm-support)
 - [Contributing](#contributing)
 
@@ -67,6 +72,7 @@ Kong Gateway:
 luarocks make kong-plugin-crowdstrike-aidr-shared-*.rockspec
 luarocks make kong-plugin-crowdstrike-aidr-request-*.rockspec
 luarocks make kong-plugin-crowdstrike-aidr-response-*.rockspec
+luarocks make kong-plugin-crowdstrike-aidr-mcp-*.rockspec
 ```
 
 For more details, see Kong Gateway's [custom plugin installation guide](https://docs.konghq.com/gateway/latest/plugin-development/distribution/#install-the-plugin).
@@ -82,7 +88,11 @@ To protect [routes in a Kong Gateway service](https://docs.konghq.com/gateway/la
 add the CrowdStrike AIDR plugins to the service's `plugins` section in the
 gateway configuration.
 
-Both plugins accept the following configuration parameters:
+### LLM plugins (crowdstrike-aidr-request and crowdstrike-aidr-response)
+
+Use these plugins to inspect LLM chat traffic (inputs and outputs) for prompt
+injection, PII, and other risks. Both plugins share the following configuration
+parameters:
 
 - **ai_guard_api_base_url** _(string, optional)_ - Base URL of the CrowdStrike AIDR API. Defaults to `https://api.crowdstrike.com/aidr/aiguard`.
 - **ai_guard_api_key** _(string, required)_ - API key for authorizing requests to the AIDR service
@@ -129,6 +139,54 @@ Both plugins accept the following configuration parameters:
 
 An [example use](#add-declarative-configuration) of this configuration is provided below.
 
+### MCP plugin (crowdstrike-aidr-mcp)
+
+Use this plugin to inspect [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
+traffic flowing through Kong Gateway to an MCP server. It inspects three event
+types:
+
+- **tool_listing** — inspects the list of tools advertised by the MCP server in response to a `tools/list` request, detecting malicious tool descriptions (e.g. prompt injection embedded in tool metadata)
+- **tool_input** — inspects tool call arguments before execution in a `tools/call` request, blocking malicious inputs before the tool runs
+- **tool_output** — inspects tool results returned by the MCP server, blocking sensitive data exfiltration in tool output
+
+The plugin accepts the following configuration parameters:
+
+- **ai_guard_api_base_url** _(string, optional)_ - Base URL of the CrowdStrike AIDR API. Defaults to `https://api.crowdstrike.com/aidr/aiguard`.
+- **ai_guard_api_key** _(string, required)_ - API key for authorizing requests to the AIDR service
+- **app_id** _(string, optional)_ - Id of source application/agent
+- **user_id** _(string, optional)_ - User or service account identifier
+- **source_location** _(string, optional)_ - Geographic location of the request origin (e.g. `US-CA`)
+- **tenant_id** _(string, optional)_ - Tenant identifier for multi-tenant deployments
+- **collector_instance_id** _(string, optional)_ - AIDR collector instance id
+- **extra_info** _(object, optional)_ - Additional metadata as key-value pairs
+
+```yaml title="Example declarative MCP plugin configuration"
+services:
+  - name: my-mcp-service
+    url: http://mcp-server:3000
+    routes:
+      - name: mcp-route
+        paths:
+          - /mcp
+        methods:
+          - POST
+        strip_path: false
+    plugins:
+      - name: crowdstrike-aidr-mcp
+        config:
+          ai_guard_api_key: "{vault://env-cs-aidr/token}"
+          ai_guard_api_base_url: "https://api.crowdstrike.com/aidr/aiguard"
+```
+
+> [!NOTE]
+> The route must be restricted to `POST` — MCP JSON-RPC 2.0 uses only POST requests.
+
+> [!NOTE]
+> If you are also using Kong's `ai-mcp-proxy` plugin on the same route, the
+> `crowdstrike-aidr-mcp` plugin runs at priority 790 (before `ai-mcp-proxy`).
+> Ensure no other plugin with a higher priority modifies the request body before
+> AIDR inspection.
+
 ## Example of use with Kong Gateway deployed in Docker
 
 [Back to Contents](#contents)
@@ -156,11 +214,12 @@ COPY ./kong-plugin-crowdstrike-aidr-*.rockspec /
 # Build from local rockspecs
 RUN luarocks make kong-plugin-crowdstrike-aidr-shared-*.rockspec \
   && luarocks make kong-plugin-crowdstrike-aidr-request-*.rockspec \
-  && luarocks make kong-plugin-crowdstrike-aidr-response-*.rockspec
+  && luarocks make kong-plugin-crowdstrike-aidr-response-*.rockspec \
+  && luarocks make kong-plugin-crowdstrike-aidr-mcp-*.rockspec
 
 # Specify the plugins to be loaded by Kong Gateway,
 # including the default bundled plugins and the AIDR plugins
-ENV KONG_PLUGINS=bundled,crowdstrike-aidr-request,crowdstrike-aidr-response
+ENV KONG_PLUGINS=bundled,crowdstrike-aidr-request,crowdstrike-aidr-response,crowdstrike-aidr-mcp
 
 # Ensure kong user is selected for image execution
 USER kong
@@ -493,7 +552,7 @@ services:
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
-      KONG_PLUGINS: bundled,crowdstrike-aidr-request,crowdstrike-aidr-response
+      KONG_PLUGINS: bundled,crowdstrike-aidr-request,crowdstrike-aidr-response,crowdstrike-aidr-mcp
       CS_AIDR_TOKEN: "${CS_AIDR_TOKEN}"
     depends_on:
       - kong-db
@@ -625,6 +684,102 @@ Each successful API call returns the created entity's details in the response.
    ```
 
 Once these steps are complete, Kong will route traffic through AIDR for both requests and responses, as shown in the [Make a request to the provider's API](#make-a-request-to-the-providers-api) section.
+
+## Example of use with MCP servers
+
+[Back to Contents](#contents)
+
+The `crowdstrike-aidr-mcp` plugin secures traffic between an MCP client (such as
+an AI agent or LLM) and an MCP server. It inspects tool listings, tool call
+inputs, and tool outputs — without modifying the MCP protocol.
+
+### MCP declarative configuration
+
+[Back to Contents](#contents)
+
+Add the plugin to a Kong Gateway service that proxies your MCP server:
+
+```yaml
+_format_version: "3.0"
+services:
+  - name: my-mcp-service
+    url: http://mcp-server:3000
+    routes:
+      - name: mcp-route
+        paths:
+          - /mcp
+        methods:
+          - POST
+        strip_path: false
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: crowdstrike-aidr-mcp
+        config:
+          ai_guard_api_key: "{vault://env-cs-aidr/token}"
+          ai_guard_api_base_url: "https://api.crowdstrike.com/aidr/aiguard"
+vaults:
+  - name: env
+    prefix: env-cs-aidr
+    config:
+      prefix: "CS_AIDR_"
+```
+
+### Test MCP traffic inspection
+
+[Back to Contents](#contents)
+
+The plugin inspects three MCP JSON-RPC 2.0 method types. Use the following
+requests to verify each inspection event appears in your AIDR console.
+
+**Tool listing** — inspects tools advertised by the MCP server:
+
+```bash
+curl -sSLX POST 'http://localhost:8000/mcp' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "jsonrpc": "2.0",
+    "method": "tools/list",
+    "id": 1,
+    "params": {}
+  }'
+```
+
+A `tool_listing` event is sent to AIDR with the server's tool definitions. If
+any tool description contains a prompt injection payload, AIDR detects it and
+the plugin returns a 400 JSON-RPC error to the client.
+
+**Tool call input** — inspects arguments before the tool executes:
+
+```bash
+curl -sSLX POST 'http://localhost:8000/mcp' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "id": 2,
+    "params": {
+      "name": "get_weather",
+      "arguments": {
+        "location": "New York"
+      }
+    }
+  }'
+```
+
+A `tool_input` event is sent to AIDR before the request reaches the MCP server.
+If the tool name or arguments contain a malicious payload, AIDR blocks the call.
+
+**Tool call output** — inspects the result returned by the tool:
+
+The same `tools/call` request above also triggers a `tool_output` event after
+the MCP server responds. If the tool result contains sensitive data (PII,
+credentials, etc.), AIDR detects it and the plugin blocks the response.
+
+> [!NOTE]
+> `initialize`, `ping`, and other non-tool MCP methods pass through without
+> inspection.
 
 ## LLM support
 
