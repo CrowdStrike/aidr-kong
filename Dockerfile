@@ -14,11 +14,12 @@ COPY ./kong-plugin-crowdstrike-aidr-*.rockspec /
 # Build from local rockspecs
 RUN luarocks make kong-plugin-crowdstrike-aidr-shared-*.rockspec \
   && luarocks make kong-plugin-crowdstrike-aidr-request-*.rockspec \
-  && luarocks make kong-plugin-crowdstrike-aidr-response-*.rockspec
+  && luarocks make kong-plugin-crowdstrike-aidr-response-*.rockspec \
+  && luarocks make kong-plugin-crowdstrike-aidr-mcp-*.rockspec
 
 # Specify the plugins to be loaded by Kong,
 # including the default bundled plugins and the CrowdStrike AIDR plugins
-ENV KONG_PLUGINS=bundled,crowdstrike-aidr-request,crowdstrike-aidr-response
+ENV KONG_PLUGINS=bundled,crowdstrike-aidr-request,crowdstrike-aidr-response,crowdstrike-aidr-mcp
 
 # Ensure kong user is selected for image execution
 USER kong
