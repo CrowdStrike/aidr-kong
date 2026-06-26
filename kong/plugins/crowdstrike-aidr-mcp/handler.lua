@@ -50,7 +50,7 @@ local function jsonrpc_error(id, message)
 	local encoded, err = cjson.encode(obj)
 	if err then
 		-- Fall back to a static error if encoding fails.
-		return '{"jsonrpc":"2.0","error":{"code":-32603,"message":"Blocked by AIDR"},"id":null}'
+		return '{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":null}'
 	end
 	return encoded
 end
