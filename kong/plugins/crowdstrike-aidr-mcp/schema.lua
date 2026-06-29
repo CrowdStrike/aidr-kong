@@ -50,6 +50,14 @@ local schema = {
 						},
 					},
 					{
+						user_name = {
+							type = "string",
+							required = false,
+							description = "Human-readable name of the user or entity initiating the AI interaction (tracked in AIDR as extra_info.user_name)",
+							default = ngx.null,
+						},
+					},
+					{
 						source_location = {
 							type = "string",
 							required = false,

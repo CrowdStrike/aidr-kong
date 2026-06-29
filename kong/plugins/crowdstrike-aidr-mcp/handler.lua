@@ -59,6 +59,28 @@ end
 -- AIDR HTTP call
 -- ---------------------------------------------------------------------------
 
+-- Resolve user_id (machine identifier) and user_name (display name) from Kong
+-- auth context, falling back to config.
+local function resolve_user(config)
+	local consumer = kong.client.get_consumer()
+	if consumer then
+		local user_id   = consumer.custom_id or consumer.id
+		local user_name = consumer.username
+		if user_id or user_name then
+			return user_id, user_name
+		end
+	end
+
+	local credential = kong.client.get_credential()
+	if credential then
+		return credential.id, nil
+	end
+
+	local cfg_id   = config.user_id   ~= ngx.null and config.user_id   or nil
+	local cfg_name = config.user_name ~= ngx.null and config.user_name or nil
+	return cfg_id, cfg_name
+end
+
 -- Call AIDR with the given event_type and guard_input.
 -- Returns the parsed AIDR response table, or nil + error string on failure.
 local function call_aidr(config, event_type, guard_input)
@@ -73,8 +95,9 @@ local function call_aidr(config, event_type, guard_input)
 	if config.app_id and config.app_id ~= ngx.null then
 		body.app_id = config.app_id
 	end
-	if config.user_id and config.user_id ~= ngx.null then
-		body.user_id = config.user_id
+	local user_id, user_name = resolve_user(config)
+	if user_id then
+		body.user_id = user_id
 	end
 	if config.source_location and config.source_location ~= ngx.null then
 		body.source_location = config.source_location
@@ -90,6 +113,9 @@ local function call_aidr(config, event_type, guard_input)
 	body.extra_info = {}
 	if service and service.name then
 		body.extra_info.app_name = service.name
+	end
+	if user_name then
+		body.extra_info.user_name = user_name
 	end
 	if config.extra_info and config.extra_info ~= ngx.null then
 		for k, v in pairs(config.extra_info) do
