@@ -6,7 +6,7 @@ local CrowdStrikeAIDRMcpPlugin = {
 	-- and block tool_input before the tool executes. Priority tuning against
 	-- Kong's ai-mcp-proxy priority may be needed for your deployment.
 	PRIORITY = 790,
-	VERSION = "0.4.0",
+	VERSION = "0.6.0",
 }
 
 -- Key used to pass state from the access phase to the response phase.

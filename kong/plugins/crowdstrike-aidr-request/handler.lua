@@ -5,7 +5,7 @@ local kong_utils = require("kong.tools.gzip")
 local CrowdStrikeAIDRRequestHandler = {
 	-- Need to run BEFORE ai-proxy
 	PRIORITY = 780,
-	VERSION = "0.4.0",
+	VERSION = "0.6.0",
 }
 
 -- Cap for reading request bodies that nginx has spooled to a temp file.
