@@ -2,11 +2,11 @@ local cjson = require("cjson.safe")
 local http = require("resty.http")
 
 local CrowdStrikeAIDRMcpPlugin = {
-	-- Run before the ai-mcp-proxy plugin in the access phase so we can inspect
-	-- and block tool_input before the tool executes. Priority tuning against
-	-- Kong's ai-mcp-proxy priority may be needed for your deployment.
-	PRIORITY = 790,
-	VERSION = "0.6.0",
+	-- Must run before ai-mcp-proxy (PRIORITY 820) in the access phase so we can
+	-- inject the required Accept header and inspect tool_input before the tool
+	-- executes.
+	PRIORITY = 950,
+	VERSION = "0.7.0",
 }
 
 -- Key used to pass state from the access phase to the response phase.
@@ -155,13 +155,23 @@ local function call_aidr(config, event_type, guard_input)
 end
 
 -- ---------------------------------------------------------------------------
--- Access phase — inspect tool_input
+-- Access phase — inject Accept header, inspect tool_input
 -- ---------------------------------------------------------------------------
 
 function CrowdStrikeAIDRMcpPlugin:access(config)
 	if kong.request.get_method() ~= "POST" then
 		return
 	end
+
+	-- Enable response buffering so kong.service.response.get_raw_body() works
+	-- in the response phase (mirrors crowdstrike-aidr-response behaviour).
+	kong.service.request.enable_buffering()
+
+	-- Inject Accept header so that ai-mcp-proxy (which checks the client-facing
+	-- Accept header) accepts the request regardless of what the caller sent.
+	-- Must use ngx.req.set_header rather than kong.service.request.set_header
+	-- because the latter only affects the upstream-bound copy of the request.
+	ngx.req.set_header("Accept", "application/json, text/event-stream")
 
 	local raw_body, err = kong.request.get_raw_body(MAX_BODY_SIZE)
 	if not raw_body or raw_body == "" then
@@ -259,6 +269,13 @@ function CrowdStrikeAIDRMcpPlugin:response(config)
 
 	-- Skip non-200 upstream responses.
 	if kong.service.response.get_status() ~= 200 then
+		return
+	end
+
+	-- Streaming responses cannot be buffered for inspection; skip silently.
+	local content_type = string.lower(kong.service.response.get_header("Content-Type") or "")
+	if string.find(content_type, "text/event-stream", 1, true) then
+		kong.log.debug("Streaming MCP response detected, skipping AIDR inspection")
 		return
 	end
 

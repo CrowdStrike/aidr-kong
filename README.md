@@ -40,6 +40,7 @@ All detections are logged for analysis, attribution, and incident response.
 - [Example of use with MCP servers](#example-of-use-with-mcp-servers)
   - [MCP declarative configuration](#mcp-declarative-configuration)
   - [Test MCP traffic inspection](#test-mcp-traffic-inspection)
+  - [Using with Kong AI MCP Proxy](#using-with-kong-ai-mcp-proxy)
 - [LLM support](#llm-support)
 - [Contributing](#contributing)
 
@@ -180,12 +181,6 @@ services:
 
 > [!NOTE]
 > The route must be restricted to `POST` — MCP JSON-RPC 2.0 uses only POST requests.
-
-> [!NOTE]
-> If you are also using Kong's `ai-mcp-proxy` plugin on the same route, the
-> `crowdstrike-aidr-mcp` plugin runs at priority 790 (before `ai-mcp-proxy`).
-> Ensure no other plugin with a higher priority modifies the request body before
-> AIDR inspection.
 
 ## Example of use with Kong Gateway deployed in Docker
 
@@ -780,6 +775,30 @@ credentials, etc.), AIDR detects it and the plugin blocks the response.
 > [!NOTE]
 > `initialize`, `ping`, and other non-tool MCP methods pass through without
 > inspection.
+
+### Using with Kong AI MCP Proxy
+
+[Back to Contents](#contents)
+
+Kong's `ai-mcp-proxy` plugin and `crowdstrike-aidr-mcp` can be used together on
+the same service. The `crowdstrike-aidr-mcp` plugin runs at priority 950, before
+`ai-mcp-proxy` (priority 820), so `tool_input` inspection always fires first.
+
+The `ai-mcp-proxy` plugin operates in four modes. The mode determines which AIDR
+inspection events fire:
+
+| Mode | `tool_input` | `tool_listing` | `tool_output` | Notes |
+|---|:---:|:---:|:---:|---|
+| `passthrough-listener` | ✓ | ✓ | ✓ | Proxies to an upstream MCP server via Kong's normal proxy pipeline. All three events are inspected. |
+| `conversion-listener` | ✓ | ✓ | ✓ | Converts REST API endpoints to MCP tools and proxies via Kong's normal proxy pipeline. All three events are inspected. |
+| `listener` | ✓ | ✗ | ✗ | Aggregates tools from `conversion-only` plugins entirely within its own `access` phase and returns the response via `kong.response.exit()`. Kong's response phase does not fire, so `tool_listing` and `tool_output` cannot be inspected. |
+| `conversion-only` | N/A | N/A | N/A | Defines tools for use by a `listener` plugin. Does not handle incoming MCP requests directly. |
+
+`passthrough-listener` and `conversion-listener` modes are fully supported.
+`listener` mode provides `tool_input` coverage only.
+
+No additional configuration is required when using both plugins together. Kong
+automatically orders them by priority.
 
 ## LLM support
 
