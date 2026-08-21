@@ -39,6 +39,7 @@ All detections are logged for analysis, attribution, and incident response.
   - [Add configuration using the Admin API](#add-configuration-using-the-admin-api)
 - [Example of use with MCP servers](#example-of-use-with-mcp-servers)
   - [MCP declarative configuration](#mcp-declarative-configuration)
+  - [Configure AIDR Policy for MCP Events](#configure-aidr-policy-for-mcp-events)
   - [Test MCP traffic inspection](#test-mcp-traffic-inspection)
   - [Using with Kong AI MCP Proxy](#using-with-kong-ai-mcp-proxy)
 - [LLM support](#llm-support)
@@ -720,6 +721,49 @@ vaults:
     config:
       prefix: "CS_AIDR_"
 ```
+
+### Configure AIDR Policy for MCP Events
+
+[Back to Contents](#contents)
+
+Update the policy associated with your Kong Collector to match MCP events.
+
+#### Edit the policy associated with you Kong Collector
+
+1. Navigate to your Kong Collector in Falcon.
+2. Click the policy associated with your collector.
+
+![](assets/edit-policy.png)
+
+#### Configure Input Conditions and Prompt Rules
+
+1. Under the **Input** tab, click the pencil to modify the conditions.
+
+![](assets/edit_input_conditions.png)
+
+2. Add the following `app.event_types` separated by **OR** and click **Save**
+- `tool_input`
+- `tool_listing`
+
+![](assets/set_input_conditions.png)
+
+3. Add the **MCP Validation** prompt rule.
+
+![](assets/set_input_rules.png)
+
+4. Click **Save Changes**
+
+#### Configure Output Conditions
+
+1. Under the **Output** tab, click the pencil to modify the conditions.
+
+![](assets/edit_output_conditions.png)
+
+2. Add the following `app.event_type` separated by **OR** and click **Save**
+- `tool_output`
+
+![](assets/set_output_conditions.png)
+
 
 ### Test MCP traffic inspection
 
