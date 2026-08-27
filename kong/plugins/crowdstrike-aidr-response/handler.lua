@@ -1,5 +1,5 @@
 -- Built on Kong's Guardrails plugin framework (kong.llm.plugin.guardrail_plugin), the
--- same framework Kong's own bundled AI guardrail plugins (e.g. ai-lakera-guard) use.
+-- same framework Kong's own bundled AI guardrail plugins use.
 --
 -- The previous handler read kong.service.response.get_raw_body()/kong.response.get_raw_body()
 -- directly from a bare :response() phase handler. Neither ever reflects ai-proxy-advanced's
