@@ -49,7 +49,10 @@ local function prepare_chat_completions_response(response)
 		return nil, "Invalid response object"
 	end
 
-	if response.object ~= "chat.completion" then
+	-- Some normalizers (e.g. Kong AI Proxy Advanced converting a non-OpenAI
+	-- upstream into OpenAI shape) may not stamp `object` even though `choices`
+	-- is well-formed OpenAI-shaped output - check the field that's actually used.
+	if type(response.choices) ~= "table" then
 		return nil, "Invalid response object"
 	end
 
