@@ -109,7 +109,7 @@ parameters:
 - **app_id** _(string, optional)_ - Id of source application/agent
 - **user_id** _(string, optional)_ - Static fallback user ID if an authenticated one is not available
 - **llm_provider** _(string, optional)_ - Underlying LLM provider name (e.g. 'OpenAI', 'Anthropic')
-- **model** _(string, optional)_ - Model used to perform the event (e.g. 'gpt-4')
+- **model** _(string, optional)_ - Model used to perform the event (e.g. 'gpt-4'). If unset, falls back to the `model` field carried in the request/response body itself (Anthropic, OpenAI, and Azure OpenAI all send it at the top level), so a single plugin instance shared across multiple models still reports the right one per event.
 - **model_version** _(string, optional)_ - Model version used to perform the event (e.g. '4')
 - **source_location** _(string, optional)_ - Location of user or app or agent
 - **tenant_id** _(string, optional)_ - For gateway-like integrations with multi-tenant support
