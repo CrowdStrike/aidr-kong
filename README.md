@@ -116,6 +116,17 @@ parameters:
 - **collector_instance_id** _(string, optional)_ - AIDR collector instance id
 - **extra_info** _(object, optional)_ - Additional metadata as key-value pairs
 
+`crowdstrike-aidr-response` is built on Kong's Guardrails plugin framework
+(the same framework backing Kong's own bundled AI guardrail plugins), which
+lets it correctly inspect and mask the AI Proxy Advanced-normalized response
+body on cross-format routes (e.g. an Anthropic upstream fronted by a
+`llm_format: openai` unified route) instead of the raw upstream body. It
+accepts two additional, response-only configuration parameters required by
+that framework:
+
+- **guarding_mode** _(string, optional)_ - Guardrails filter mode; must be `OUTPUT` (default) or `BOTH` for this response-only plugin - never `INPUT`.
+- **stop_on_error** _(boolean, optional)_ - If `true` (default), respond with a 500 when CrowdStrike AIDR can't be reached or parsed, instead of passing the response through unguarded.
+
 ```yaml title="Example declarative plugin configuration"
 ...
 

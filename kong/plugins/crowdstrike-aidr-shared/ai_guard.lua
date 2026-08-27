@@ -184,6 +184,125 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
 	end
 end
 
+--- Guard a buffered response body for Kong's Guardrails plugin framework
+--- (kong.llm.plugin.guardrail_plugin / shared-filters/guardrails/guard-buffered-response).
+--- Unlike run_ai_guard, this never calls kong.response.exit() itself - it returns the
+--- {block, block_message, masked, body} contract the framework's guard-buffered-response
+--- filter expects, so the framework can apply blocking/masking correctly against the body
+--- it read via ai_plugin_ctx.get_response_body() (the AI Proxy Advanced-normalized body,
+--- not the raw upstream one).
+---@param config table plugin config
+---@param raw_body string response body, already normalized to config.upstream_llm's format
+---@return table? resp {block, block_message, masked, body}
+---@return string? err
+function AIGuard.guard_buffered_response(config, raw_body)
+	local original_body, err = cjson.decode(raw_body)
+	if err then
+		return nil, "Failed to decode JSON response body: " .. err
+	end
+
+	local translator_instance, err = translate.get_translator(config.upstream_llm.provider)
+	if err ~= nil or translator_instance == nil then
+		return nil, "Failed to get translator: " .. tostring(err)
+	end
+
+	local api_uri = config.upstream_llm.api_uri:gsub("^%s+", ""):gsub("%s+$", "")
+	local transformer = translator_instance[api_uri]
+	if transformer == nil then
+		return nil, string.format(
+			"Could not find transformer for provider '%s' for upstream uri '%s'",
+			config.upstream_llm.provider,
+			api_uri
+		)
+	end
+
+	---@type JSONMessageMap, string?
+	local messages, err = transformer["response"](original_body)
+	if err ~= nil then
+		return nil, "Failed to process message: " .. err
+	end
+
+	if #messages.messages == 0 then
+		return { block = false }
+	end
+
+	local ai_guard_request_body = AIGuard.get_aidr_fields(config, "response", original_body)
+	ai_guard_request_body.guard_input = { messages = messages.messages }
+	if messages.tools and #messages.tools > 0 then
+		ai_guard_request_body.guard_input.tools = messages.tools
+	end
+
+	local raw_ai_guard_request_body, err = cjson.encode(ai_guard_request_body)
+	if err then
+		return nil, "Error encoding AIDR request body: " .. err
+	end
+
+	local url = config.ai_guard_api_base_url .. "/v1/guard_chat_completions"
+	local httpc = http.new()
+	local res, err = httpc:request_uri(url, {
+		method = "POST",
+		body = raw_ai_guard_request_body,
+		headers = {
+			["Authorization"] = "Bearer " .. config.ai_guard_api_key,
+			["Content-Type"] = "application/json",
+		},
+	})
+
+	if err then
+		return nil, "Error making request to CrowdStrike AIDR: " .. err
+	end
+
+	if res.status ~= 200 then
+		return nil, string.format("CrowdStrike AIDR returned error: %s %s", res.status, res.body)
+	end
+
+	local response, err = cjson.decode(res.body)
+	if err then
+		return nil, "Error decoding CrowdStrike AIDR response: " .. err
+	end
+
+	if type(response.result) ~= "table" then
+		return nil, "CrowdStrike AIDR response missing or invalid result field"
+	end
+
+	if response.result.blocked then
+		return {
+			block = true,
+			block_message = {
+				status = "Response has been rejected by CrowdStrike AIDR",
+				reason = response.summary or "Content blocked by AIDR policy",
+			},
+		}
+	end
+
+	local capabilities = translator_instance.capabilities or {}
+	local can_redact = capabilities.redaction
+	if can_redact == nil then
+		can_redact = true
+	end
+
+	if not can_redact or not response.result.transformed then
+		return { block = false }
+	end
+
+	local guard_output = response.result.guard_output
+	if not guard_output or not guard_output.messages or #guard_output.messages == 0 then
+		return { block = false }
+	end
+
+	local new_payload, updated = translate.rewrite_llm_message(original_body, messages, guard_output.messages)
+	if not updated then
+		return { block = false }
+	end
+
+	local raw_new_payload, err = cjson.encode(new_payload)
+	if err then
+		return nil, "Failed to encode redacted payload: " .. err
+	end
+
+	return { block = false, masked = true, body = raw_new_payload }
+end
+
 function AIGuard.get_aidr_fields(config, mode)
   local body = {}
 
