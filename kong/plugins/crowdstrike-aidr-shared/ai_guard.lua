@@ -88,7 +88,7 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
   local ai_guard_request_body = {}
 
   -- Build CrowdStrike AIDR request body
-  ai_guard_request_body = AIGuard.get_aidr_fields(config, mode)
+  ai_guard_request_body = AIGuard.get_aidr_fields(config, mode, original_body)
   ai_guard_request_body.guard_input = {}
   ai_guard_request_body.guard_input.messages = messages.messages
   if messages.tools and #messages.tools > 0 then
@@ -184,7 +184,7 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
 	end
 end
 
-function AIGuard.get_aidr_fields(config, mode)
+function AIGuard.get_aidr_fields(config, mode, original_body)
   local body = {}
 
   -- Required fields
@@ -219,6 +219,11 @@ function AIGuard.get_aidr_fields(config, mode)
 
   if config.model and config.model ~= ngx.null then
     body.model = config.model
+  elseif original_body and type(original_body.model) == "string" then
+    -- Fall back to the model the client sent in the request/response body
+    -- (Anthropic, OpenAI, and Azure OpenAI all carry it at the top level)
+    -- when no static config.model override is set.
+    body.model = original_body.model
   end
 
   if config.model_version and config.model_version ~= ngx.null then
