@@ -127,6 +127,19 @@ that framework:
 - **guarding_mode** _(string, optional)_ - Guardrails filter mode; must be `OUTPUT` (default) or `BOTH` for this response-only plugin - never `INPUT`.
 - **stop_on_error** _(boolean, optional)_ - If `true` (default), respond with a 500 when CrowdStrike AIDR can't be reached or parsed, instead of passing the response through unguarded.
 
+`crowdstrike-aidr-response` also inspects SSE streaming responses. Since a
+stream's deltas are already on the wire as they arrive, streamed content
+can't be blocked or redacted the way a buffered response can - instead,
+deltas are aggregated into batches and shipped to CrowdStrike AIDR in the
+background for logging/flagging as they're relayed to the client. If AIDR
+flags a batch, the rest of the stream is aborted (via Kong AI Proxy
+Advanced's `blocked_by_guard` mechanism) and a block message is injected,
+but any deltas already sent before that verdict cannot be recalled. Two more
+response-only configuration parameters control this:
+
+- **guard_streaming_response** _(boolean, optional)_ - Inspect SSE streaming responses by batching deltas to CrowdStrike AIDR for logging/flagging (non-blocking). Defaults to `true`; set `false` to opt a route out of streaming inspection entirely. Buffered (non-streaming) responses are always guarded regardless of this setting.
+- **stream_batch_size** _(integer, optional)_ - Number of streamed SSE deltas to aggregate before sending a batch to CrowdStrike AIDR. Defaults to `20`. Batches from the same stream are correlated via a shared stream ID. Lower values catch policy violations sooner at the cost of more AIDR API calls per stream.
+
 ```yaml title="Example declarative plugin configuration"
 ...
 
