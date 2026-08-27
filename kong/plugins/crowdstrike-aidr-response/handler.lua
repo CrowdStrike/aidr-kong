@@ -29,4 +29,10 @@ plugin:register_function("guard-buffered-response", function(conf, body)
 	return ai_guard.guard_buffered_response(conf, body)
 end)
 
+-- Buffered guarding never fires for SSE streams (the framework runs the STREAMING
+-- stage instead of the buffered :response path). Register a custom STREAMING-stage
+-- filter so streamed responses are still inspected - batched, correlated, and
+-- non-blocking. See kong/plugins/crowdstrike-aidr-shared/stream_guard.lua.
+plugin:register_custom_filter(require("kong.plugins.crowdstrike-aidr-shared.stream_guard"))
+
 return plugin:build()

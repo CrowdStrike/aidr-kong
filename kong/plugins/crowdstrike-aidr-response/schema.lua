@@ -53,6 +53,26 @@ local schema = {
 						},
 					},
 					{
+						-- SSE streaming responses can't be blocked/redacted (deltas are
+						-- already on the wire), so the streaming path only logs and flags.
+						-- Set false to opt a route out of streaming inspection entirely.
+						guard_streaming_response = {
+							type = "boolean",
+							required = true,
+							default = true,
+							description = "Inspect SSE streaming responses by batching deltas to CrowdStrike AIDR for logging/flagging (non-blocking). Buffered (non-streaming) responses are always guarded regardless.",
+						},
+					},
+					{
+						stream_batch_size = {
+							type = "integer",
+							required = true,
+							default = 20,
+							gt = 0,
+							description = "Number of streamed SSE deltas to aggregate before sending a batch to CrowdStrike AIDR. Batches of the same stream are correlated via a shared stream_id.",
+						},
+					},
+					{
 						ai_guard_api_base_url = {
 							type = "string",
 							required = false,
