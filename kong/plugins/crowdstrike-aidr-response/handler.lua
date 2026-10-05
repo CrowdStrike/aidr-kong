@@ -1,50 +1,38 @@
-local kong_utils = require("kong.tools.gzip")
-
+-- Built on Kong's Guardrails plugin framework (kong.llm.plugin.guardrail_plugin), the
+-- same framework Kong's own bundled AI guardrail plugins use.
+--
+-- The previous handler read kong.service.response.get_raw_body()/kong.response.get_raw_body()
+-- directly from a bare :response() phase handler. Neither ever reflects ai-proxy-advanced's
+-- provider-format normalization (e.g. Anthropic /v1/messages -> OpenAI chat-completions on a
+-- unified, llm_format = "openai" route) - that normalized body lives only in ai-proxy-advanced's
+-- private kong.llm.plugin.ctx state. Exiting with the raw upstream body on a cross-format route
+-- clobbered the client-facing OpenAI contract.
+--
+-- The Guardrails framework's guard-buffered-response filter reads via
+-- ai_plugin_ctx.get_response_body(), which resolves to that same shared ctx (falling back to
+-- the raw upstream body only when no AI proxy plugin ran), and applies masked output via
+-- ngx.ctx.buffered_body - the path ai-proxy-advanced's own response pipeline actually consumes.
+local Guardrail_Plugin_Builder = require("kong.llm.plugin.guardrail_plugin")
 local ai_guard = require("kong.plugins.crowdstrike-aidr-shared.ai_guard")
 
--- Plugin class
-local CrowdStrikeAIDRResponseHandler = {
+local PLUGIN_NAME = "crowdstrike-aidr-response"
+
+local plugin = Guardrail_Plugin_Builder.new({
+	NAME = PLUGIN_NAME,
 	PRIORITY = 760,
-	VERSION = "0.7.0",
-}
+	MANIFESTS = {
+		can_guard_buffered_response = true,
+	},
+})
 
-function CrowdStrikeAIDRResponseHandler:access(config)
-	kong.service.request.enable_buffering()
-end
+plugin:register_function("guard-buffered-response", function(conf, body)
+	return ai_guard.guard_buffered_response(conf, body)
+end)
 
-function CrowdStrikeAIDRResponseHandler:response(config)
-	local raw_body = kong.service.response.get_raw_body()
-	local status = kong.service.response.get_status()
-	local headers = kong.service.response.get_headers()
+-- Buffered guarding never fires for SSE streams (the framework runs the STREAMING
+-- stage instead of the buffered :response path). Register a custom STREAMING-stage
+-- filter so streamed responses are still inspected - batched, correlated, and
+-- non-blocking. See kong/plugins/crowdstrike-aidr-shared/stream_guard.lua.
+plugin:register_custom_filter(require("kong.plugins.crowdstrike-aidr-shared.stream_guard"))
 
-	if status ~= 200 then
-		return kong.response.exit(status, raw_body, headers)
-	end
-
-	-- Streaming responses are not supported.
-	local content_type = string.lower(headers["Content-Type"] or headers["content-type"] or "")
-	local is_streaming = string.find(content_type, "text/event-stream", 1, true)
-		or string.find(content_type, "application/vnd.amazon.eventstream", 1, true)
-	if is_streaming then
-		kong.log.debug("Streaming response detected, skipping AIDR")
-		return kong.response.exit(status, raw_body, headers)
-	end
-
-	local encoding = headers["Content-Encoding"]
-	if encoding == "gzip" then
-		raw_body = kong_utils.inflate_gzip(raw_body)
-	end
-
-	local updated_response = ai_guard.run_ai_guard(config, "response", raw_body)
-	if updated_response ~= nil then
-		raw_body = updated_response
-	end
-
-	headers["content-length"] = nil
-	headers["content-encoding"] = nil
-	headers["content-type"] = "application/json"
-
-	return kong.response.exit(status, raw_body, headers)
-end
-
-return CrowdStrikeAIDRResponseHandler
+return plugin:build()

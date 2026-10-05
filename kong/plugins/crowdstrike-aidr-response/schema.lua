@@ -30,6 +30,49 @@ local schema = {
 				type = "record",
 				fields = {
 					{
+						-- Required by Kong's Guardrails "guard-buffered-response" filter.
+						-- This plugin only guards the response, so this must never be
+						-- "INPUT" (that value would make guard-buffered-response skip).
+						guarding_mode = {
+							type = "string",
+							required = true,
+							default = "OUTPUT",
+							one_of = { "INPUT", "OUTPUT", "BOTH" },
+							description = "Guardrails filter mode; this plugin is response-only, so leave as OUTPUT (or BOTH).",
+						},
+					},
+					{
+						-- Required by Kong's Guardrails framework: whether a CrowdStrike
+						-- AIDR API/parsing failure should fail closed (500) or pass the
+						-- (unguarded) response through to the client.
+						stop_on_error = {
+							type = "boolean",
+							required = true,
+							default = true,
+							description = "If true, respond 500 when CrowdStrike AIDR can't be reached/parsed instead of passing the response through unguarded.",
+						},
+					},
+					{
+						-- SSE streaming responses can't be blocked/redacted (deltas are
+						-- already on the wire), so the streaming path only logs and flags.
+						-- Set false to opt a route out of streaming inspection entirely.
+						guard_streaming_response = {
+							type = "boolean",
+							required = true,
+							default = true,
+							description = "Inspect SSE streaming responses by batching deltas to CrowdStrike AIDR for logging/flagging (non-blocking). Buffered (non-streaming) responses are always guarded regardless.",
+						},
+					},
+					{
+						stream_batch_size = {
+							type = "integer",
+							required = true,
+							default = 20,
+							gt = 0,
+							description = "Number of streamed SSE deltas to aggregate before sending a batch to CrowdStrike AIDR. Batches of the same stream are correlated via a shared stream_id.",
+						},
+					},
+					{
 						ai_guard_api_base_url = {
 							type = "string",
 							required = false,
@@ -52,7 +95,7 @@ local schema = {
 									provider = {
 										type = "string",
 										required = true,
-										description = "Provider name used to translate the LLM request to CrowdStrike AIDR format, e.g. 'openai'",
+										description = "Provider to translate the AI Proxy Advanced-normalized response body, e.g. 'openai' on a unified llm_format=openai route",
 										one_of = AVAILABLE_TRANSLATORS,
 									},
 								},

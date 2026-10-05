@@ -26,6 +26,7 @@ build = {
 	type = "builtin",
 	modules = {
 		["kong.plugins.crowdstrike-aidr-shared.ai_guard"] = "kong/plugins/crowdstrike-aidr-shared/ai_guard.lua",
+		["kong.plugins.crowdstrike-aidr-shared.stream_guard"] = "kong/plugins/crowdstrike-aidr-shared/stream_guard.lua",
 		["kong.plugins.crowdstrike-aidr-shared.aidr-translator.init"] = "kong/plugins/crowdstrike-aidr-shared/aidr-translator/init.lua",
 		["kong.plugins.crowdstrike-aidr-shared.aidr-translator.model"] = "kong/plugins/crowdstrike-aidr-shared/aidr-translator/model.lua",
 		-- List of llm modules -- be sure to keep up to date
