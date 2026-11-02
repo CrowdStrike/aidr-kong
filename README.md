@@ -98,6 +98,7 @@ parameters:
 
 - **ai_guard_api_base_url** _(string, optional)_ - Base URL of the CrowdStrike AIDR API. Defaults to `https://api.crowdstrike.com/aidr/aiguard`.
 - **ai_guard_api_key** _(string, required)_ - API key for authorizing requests to the AIDR service
+- **failure_mode** _(string, optional)_ - What to do when CrowdStrike AIDR cannot inspect the traffic, for example when the service is unreachable or rejects a payload that is too large. `closed` (default) rejects the traffic with a HTTP/500 error. `open` logs a warning and lets the traffic through.
 - **upstream_llm** _(object, required)_ - Defines the upstream LLM provider and the route being protected
   - **provider** _(string, required)_ - Name of the supported LLM provider module. Must be one of the following:
     - `anthropic` - Anthropic Claude
@@ -155,6 +156,7 @@ The plugin accepts the following configuration parameters:
 
 - **ai_guard_api_base_url** _(string, optional)_ - Base URL of the CrowdStrike AIDR API. Defaults to `https://api.crowdstrike.com/aidr/aiguard`.
 - **ai_guard_api_key** _(string, required)_ - API key for authorizing requests to the AIDR service
+- **failure_mode** _(string, optional)_ - What to do when CrowdStrike AIDR cannot inspect the traffic, for example when the service is unreachable or rejects a payload that is too large. `closed` (default) rejects the traffic with a HTTP/500 error. `open` logs a warning and lets the traffic through.
 - **app_id** _(string, optional)_ - Id of source application/agent
 - **user_id** _(string, optional)_ - User or service account identifier
 - **source_location** _(string, optional)_ - Geographic location of the request origin (e.g. `US-CA`)

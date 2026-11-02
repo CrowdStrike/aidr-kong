@@ -143,7 +143,7 @@ local function call_aidr(config, event_type, guard_input)
 	end
 
 	if res.status ~= 200 then
-		return nil, "status: " .. res.status
+		return nil, "status: " .. res.status .. ", payload bytes: " .. #raw_body
 	end
 
 	local response, decode_err = cjson.decode(res.body)
@@ -151,7 +151,34 @@ local function call_aidr(config, event_type, guard_input)
 		return nil, "decode: " .. decode_err
 	end
 
+	if type(response) ~= "table" or type(response.result) ~= "table" then
+		return nil, "missing or invalid result field"
+	end
+
 	return response, nil
+end
+
+-- Inspect guard_input with AIDR and exit with a JSON-RPC error if AIDR blocks
+-- it.
+local function inspect(config, id, event_type, guard_input, blocked_msg)
+	local aidr_res, err = call_aidr(config, event_type, guard_input)
+
+	if err then
+		if config.failure_mode == "open" then
+			kong.log.warn("AIDR ", event_type, " check failed, failing open: ", err)
+			return
+		end
+		kong.log.err("AIDR ", event_type, " check failed: ", err)
+		return kong.response.exit(500, jsonrpc_error(id, "AIDR inspection failed"), {
+			["Content-Type"] = "application/json",
+		})
+	end
+
+	if aidr_res.result.blocked == true then
+		return kong.response.exit(400, jsonrpc_error(id, aidr_res.summary or blocked_msg), {
+			["Content-Type"] = "application/json",
+		})
+	end
 end
 
 -- ---------------------------------------------------------------------------
@@ -224,30 +251,9 @@ function CrowdStrikeAIDRMcpPlugin:access(config)
 		content = tool_name .. ": " .. args_str
 	end
 
-	local aidr_res, call_err = call_aidr(config, "tool_input", {
+	return inspect(config, id, "tool_input", {
 		messages = { { role = "user", content = content } },
-	})
-
-	if call_err then
-		kong.log.err("AIDR tool_input check failed: ", call_err)
-		kong.response.exit(500, jsonrpc_error(id, "AIDR inspection failed"), {
-			["Content-Type"] = "application/json",
-		})
-	end
-
-	if type(aidr_res.result) ~= "table" then
-		kong.log.err("AIDR tool_input: missing or invalid result field")
-		kong.response.exit(500, jsonrpc_error(id, "AIDR inspection failed"), {
-			["Content-Type"] = "application/json",
-		})
-	end
-
-	if aidr_res.result.blocked == true then
-		local msg = aidr_res.summary or "Tool call blocked by CrowdStrike AIDR policy"
-		kong.response.exit(400, jsonrpc_error(id, msg), {
-			["Content-Type"] = "application/json",
-		})
-	end
+	}, "Tool call blocked by CrowdStrike AIDR policy")
 end
 
 -- ---------------------------------------------------------------------------
@@ -318,30 +324,9 @@ function CrowdStrikeAIDRMcpPlugin:response(config)
 			return
 		end
 
-		local aidr_res, call_err = call_aidr(config, "tool_listing", {
+		return inspect(config, id, "tool_listing", {
 			tools = aidr_tools,
-		})
-
-		if call_err then
-			kong.log.err("AIDR tool_listing check failed: ", call_err)
-			kong.response.exit(500, jsonrpc_error(id, "AIDR inspection failed"), {
-				["Content-Type"] = "application/json",
-			})
-		end
-
-		if type(aidr_res.result) ~= "table" then
-			kong.log.err("AIDR tool_listing: missing or invalid result field")
-			kong.response.exit(500, jsonrpc_error(id, "AIDR inspection failed"), {
-				["Content-Type"] = "application/json",
-			})
-		end
-
-		if aidr_res.result.blocked == true then
-			local msg = aidr_res.summary or "Tool listing blocked by CrowdStrike AIDR policy"
-			kong.response.exit(400, jsonrpc_error(id, msg), {
-				["Content-Type"] = "application/json",
-			})
-		end
+		}, "Tool listing blocked by CrowdStrike AIDR policy")
 
 	-- ----- tools/call → tool_output -----
 	elseif method == "tools/call" then
@@ -362,30 +347,9 @@ function CrowdStrikeAIDRMcpPlugin:response(config)
 			return
 		end
 
-		local aidr_res, call_err = call_aidr(config, "tool_output", {
+		return inspect(config, id, "tool_output", {
 			messages = messages,
-		})
-
-		if call_err then
-			kong.log.err("AIDR tool_output check failed: ", call_err)
-			kong.response.exit(500, jsonrpc_error(id, "AIDR inspection failed"), {
-				["Content-Type"] = "application/json",
-			})
-		end
-
-		if type(aidr_res.result) ~= "table" then
-			kong.log.err("AIDR tool_output: missing or invalid result field")
-			kong.response.exit(500, jsonrpc_error(id, "AIDR inspection failed"), {
-				["Content-Type"] = "application/json",
-			})
-		end
-
-		if aidr_res.result.blocked == true then
-			local msg = aidr_res.summary or "Tool output blocked by CrowdStrike AIDR policy"
-			kong.response.exit(400, jsonrpc_error(id, msg), {
-				["Content-Type"] = "application/json",
-			})
-		end
+		}, "Tool output blocked by CrowdStrike AIDR policy")
 	end
 end
 

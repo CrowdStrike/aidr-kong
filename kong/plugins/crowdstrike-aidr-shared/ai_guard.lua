@@ -27,6 +27,39 @@ local function resolve_user_id(config)
   return config.user_id
 end
 
+-- POST raw_body to AIDR. Returns the decoded response with a table `result`,
+-- or nil + error string when AIDR could not return a verdict.
+local function call_ai_guard(config, url, raw_body)
+	local httpc = http.new()
+	local res, err = httpc:request_uri(url, {
+		method = "POST",
+		body = raw_body,
+		headers = {
+			["Authorization"] = "Bearer " .. config.ai_guard_api_key,
+			["Content-Type"] = "application/json",
+		},
+	})
+
+	if err then
+		return nil, "http: " .. err
+	end
+
+	if res.status ~= 200 then
+		return nil, "status: " .. res.status .. ", payload bytes: " .. #raw_body .. ", body: " .. (res.body or "")
+	end
+
+	local response, err = cjson.decode(res.body)
+	if err then
+		return nil, "decode: " .. err
+	end
+
+	if type(response) ~= "table" or type(response.result) ~= "table" then
+		return nil, "missing or invalid result field"
+	end
+
+	return response
+end
+
 
 ---@alias mode "request" | "response"
 
@@ -102,34 +135,13 @@ function AIGuard.run_ai_guard(config, mode, raw_original_body)
 	end
 
 
-	local httpc = http.new()
-	local res, err = httpc:request_uri(url, {
-		method = "POST",
-		body = raw_ai_guard_request_body,
-		headers = {
-			["Authorization"] = "Bearer " .. config.ai_guard_api_key,
-			["Content-Type"] = "application/json",
-		},
-	})
-
+	local response, err = call_ai_guard(config, url, raw_ai_guard_request_body)
 	if err then
-		kong.log.err("Error making request to CrowdStrike AIDR: " .. err)
-		return exit_fn(500, internalError)
-	end
-
-	if res.status ~= 200 then
-		kong.log.err("CrowdStrike AIDR returned error: ", res.status, " ", res.body)
-		return exit_fn(500, internalError)
-	end
-
-	local response, err = cjson.decode(res.body)
-	if err then
-		kong.log.err("Error decoding CrowdStrike AIDR response: " .. err)
-		return exit_fn(500, internalError)
-	end
-
-	if type(response.result) ~= "table" then
-		kong.log.err("CrowdStrike AIDR response missing or invalid result field")
+		if config.failure_mode == "open" then
+			kong.log.warn("CrowdStrike AIDR check failed, failing open: ", err)
+			return
+		end
+		kong.log.err("CrowdStrike AIDR check failed: ", err)
 		return exit_fn(500, internalError)
 	end
 
