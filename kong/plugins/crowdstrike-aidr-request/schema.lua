@@ -44,6 +44,15 @@ local schema = {
 						},
 					},
 					{
+						failure_mode = {
+							type = "string",
+							required = true,
+							default = "closed",
+							one_of = { "closed", "open" },
+							description = "What to do when CrowdStrike AIDR cannot inspect the traffic (e.g. service is unreachable or the payload is too large): 'closed' rejects it, 'open' lets it through",
+						},
+					},
+					{
 						upstream_llm = {
 							type = "record",
 							required = true,
