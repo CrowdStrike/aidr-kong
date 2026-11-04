@@ -6,7 +6,7 @@ local CrowdStrikeAIDRMcpPlugin = {
 	-- inject the required Accept header and inspect tool_input before the tool
 	-- executes.
 	PRIORITY = 950,
-	VERSION = "0.7.0",
+	VERSION = "0.8.0",
 }
 
 -- Key used to pass state from the access phase to the response phase.
