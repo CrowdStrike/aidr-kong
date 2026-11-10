@@ -22,7 +22,13 @@ All detections are logged for analysis, attribution, and incident response.
 ## Contents
 
 - [Prerequisites](#prerequisites)
-- [Installation](#installation)
+- [Deployment options](#deployment-options)
+- [Installation — installed custom policy](#installation--installed-custom-policy)
+- [Installation — streamed custom policy (Kong Gateway 3.14+ and AI Gateway 2.x)](#installation--streamed-custom-policy-kong-gateway-314-and-ai-gateway-2x)
+  - [Data plane prerequisites](#data-plane-prerequisites)
+  - [Build the dist artifacts](#build-the-dist-artifacts)
+  - [Upload to Konnect via the Admin API](#upload-to-konnect-via-the-admin-api)
+  - [Upload via the Konnect UI](#upload-via-the-konnect-ui)
 - [Plugin configuration reference](#plugin-configuration-reference)
   - [LLM plugins (crowdstrike-aidr-request and crowdstrike-aidr-response)](#llm-plugins-crowdstrike-aidr-request-and-crowdstrike-aidr-response)
   - [MCP plugin (crowdstrike-aidr-mcp)](#mcp-plugin-crowdstrike-aidr-mcp)
@@ -37,6 +43,10 @@ All detections are logged for analysis, attribution, and incident response.
 - [Example of use with Kong AI Gateway in DB mode](#example-of-use-with-kong-ai-gateway-in-db-mode)
   - [Run Kong AI Gateway in Docker Compose](#run-kong-ai-gateway-in-docker-compose)
   - [Add configuration using the Admin API](#add-configuration-using-the-admin-api)
+- [Example of use with Kong AI Gateway 2.x (Konnect)](#example-of-use-with-kong-ai-gateway-2x-konnect)
+  - [Build image for AI Gateway 2.x](#build-image-for-ai-gateway-2x)
+  - [Installed custom policies on AI Gateway 2.x](#installed-custom-policies-on-ai-gateway-2x)
+  - [Streaming custom policies on AI Gateway 2.x](#streaming-custom-policies-on-ai-gateway-2x)
 - [Example of use with MCP servers](#example-of-use-with-mcp-servers)
   - [MCP declarative configuration](#mcp-declarative-configuration)
   - [Configure AIDR Policy for MCP Events](#configure-aidr-policy-for-mcp-events)
@@ -63,11 +73,41 @@ All detections are logged for analysis, attribution, and incident response.
   malicious content. You can customize these policies or create new ones to suit
   your needs.
 
-## Installation
+## Deployment options
 
 [Back to Contents](#contents)
 
-The plugins can be built from source using the `luarocks` utility bundled with
+Kong offers two ways to deploy custom policies. Choose based on whether you
+manage your own data plane or run on Konnect:
+
+| | Installed custom policy | Streamed custom policy |
+|---|---|---|
+| **What you supply** | `handler.lua`, `schema.lua`, plus any additional rocks | `handler.lua` + `schema.lua` only (two files per plugin) |
+| **How it's deployed** | Installed directly on the data plane | Pushed through gateway configuration — no DP access needed |
+| **Data plane restart** | Required | Not required |
+| **Minimum version** | Any supported Kong Gateway | Kong Gateway 3.14+ · Kong AI Gateway 2.x |
+| **`untrusted_lua` setting** | Default (`strict`) | Must be `lax` |
+
+Use the **installed** path when you build and manage your own data plane image.
+The `crowdstrike-aidr-shared` rock can be installed alongside the plugins as
+normal.
+
+Use the **streamed** path when you run on Konnect and want to deploy policy
+updates without restarting or rebuilding data plane nodes. The plugins are
+packaged as self-contained single-file artifacts (`dist/`) with all shared code
+inlined.
+
+> [!IMPORTANT]
+> The streamed path requires `untrusted_lua = lax` on the data plane because
+> the AIDR plugins make outbound HTTP calls using `resty.http`. This setting
+> allows `resty.http` while keeping the rest of the Lua sandbox enabled — it
+> is not equivalent to turning the sandbox off.
+
+## Installation — installed custom policy
+
+[Back to Contents](#contents)
+
+Install the plugins from source using the `luarocks` utility bundled with
 Kong Gateway:
 
 ```bash
@@ -82,7 +122,132 @@ For more details, see Kong Gateway's [custom plugin installation guide](https://
 An [example](#build-image) of installing the plugins in a Docker image is
 provided below.
 
-## Configuration
+## Installation — streamed custom policy (Kong Gateway 3.14+ and AI Gateway 2.x)
+
+[Back to Contents](#contents)
+
+Streamed custom policies are uploaded to Konnect as two Lua files —
+`handler.lua` and `schema.lua` — and pushed to data planes through gateway
+configuration. No custom image or rock installation is required, and data
+plane nodes do not need to restart when the policy is updated or changed.
+
+On Kong AI Gateway 2.x, streamed custom policies appear in the Konnect portal
+as **AI custom policies**. On Kong Gateway 3.14+, they appear as
+**custom plugins**. Both use the same `dist/` artifacts from this repository.
+
+### Data plane prerequisites
+
+[Back to Contents](#contents)
+
+Set the following on each data plane node that will run the streamed plugins:
+
+```bash
+KONG_UNTRUSTED_LUA=lax
+KONG_CUSTOM_PLUGIN_STREAMING_ENABLED=on
+```
+
+For **Kong AI Gateway 2.x**, also set:
+
+```bash
+KONG_PLUGINS=bundled
+```
+
+> [!IMPORTANT]
+> On AI Gateway 2.x, `KONG_PLUGINS` must be `bundled` only. Do **not** append the AIDR plugin names.
+> Streaming custom plugins are loaded dynamically by Kong from configuration pushed by Konnect —
+> they must not be pre-installed on the data plane.
+
+### Build the dist artifacts
+
+[Back to Contents](#contents)
+
+Each GitHub release attaches pre-built `dist/` artifacts as
+`<plugin>-dist.zip` files. To build them yourself from source:
+
+```bash
+make dist
+```
+
+This generates the following files:
+
+```
+dist/
+  crowdstrike-aidr-request/
+    handler.lua   # all shared code inlined; no external rock dependencies
+    schema.lua    # sandbox-safe; no require(), ngx, or custom_validator
+  crowdstrike-aidr-response/
+    handler.lua
+    schema.lua
+  crowdstrike-aidr-mcp/
+    handler.lua
+    schema.lua
+```
+
+You can verify the schemas will pass Konnect's upload check before deploying:
+
+```bash
+make lint
+```
+
+### Upload to Konnect via the Admin API
+
+[Back to Contents](#contents)
+
+Use the Konnect Control Plane Admin API to upload each plugin. Replace
+`<KONNECT_CP_URL>` with your control plane URL and `<TOKEN>` with a
+Konnect personal access token or system account token.
+
+> [!NOTE]
+> This endpoint is for **Kong Gateway 3.14+** (`/custom-plugins`). For
+> **Kong AI Gateway 2.x**, use the AI Gateway API instead — see the
+> [AI Gateway 2.x example](#example-of-use-with-kong-ai-gateway-2x-konnect) below.
+
+```bash
+KONNECT_CP_URL="https://<region>.api.konghq.com/v2/control-planes/<cp-id>"
+TOKEN="<konnect-token>"
+
+for plugin in crowdstrike-aidr-request crowdstrike-aidr-response crowdstrike-aidr-mcp; do
+  curl -sSL -X POST "$KONNECT_CP_URL/custom-plugins" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    --data-binary "{
+      \"name\": \"$plugin\",
+      \"handler\": $(jq -Rs . < dist/$plugin/handler.lua),
+      \"schema\":  $(jq -Rs . < dist/$plugin/schema.lua)
+    }"
+done
+```
+
+> [!NOTE]
+> `jq -Rs .` reads the file as a raw string and JSON-encodes it. If `jq` is not
+> available, use `python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))"` instead.
+
+Once uploaded, configure the plugins on your services and routes exactly as
+shown in the examples below — the configuration fields are identical regardless
+of which deployment option you chose.
+
+### Upload via the Konnect UI
+
+[Back to Contents](#contents)
+
+**Kong AI Gateway 2.x** — navigate to your control plane, open
+**AI Gateway → AI Custom Policies**, and click **New AI Custom Policy**.
+
+**Kong Gateway 3.14+** — navigate to your control plane, open
+**Gateway → Custom Plugins**, and click **New Custom Plugin**.
+
+For each of the three plugins:
+
+1. Select **Streamed custom policy** (not "Installed custom policy").
+2. Enter the plugin name (e.g. `crowdstrike-aidr-request`).
+3. Paste the contents of `dist/<plugin>/schema.lua` into the **Schema** field.
+4. Paste the contents of `dist/<plugin>/handler.lua` into the **Handler** field.
+5. Click **Save**.
+
+No data plane restart is needed. The policy becomes active on the next
+configuration push to your data plane nodes.
+
+## Plugin configuration reference
 
 [Back to Contents](#contents)
 
@@ -233,7 +398,11 @@ CMD ["kong", "docker-start"]
 Build the image:
 
 ```bash
+# Standard Kong Gateway (default)
 docker build -t kong-plugin-crowdstrike-aidr .
+
+# Kong AI Gateway 2.x
+docker build --build-arg BASE_IMAGE=kong/kong-ai-gateway:latest -t kong-aidr-ai-gateway-2 .
 ```
 
 ### Add declarative configuration
@@ -488,7 +657,7 @@ You may want to use Kong Gateway with a database to support dynamic updates and 
 
 In this example, Kong AI Gateway runs with a database using Docker Compose and is configured using the Admin API.
 
-### Docker Compose example
+### Run Kong AI Gateway in Docker Compose
 
 [Back to Contents](#contents)
 
@@ -682,6 +851,225 @@ Each successful API call returns the created entity's details in the response.
    ```
 
 Once these steps are complete, Kong will route traffic through AIDR for both requests and responses, as shown in the [Make a request to the provider's API](#make-a-request-to-the-providers-api) section.
+
+## Example of use with Kong AI Gateway 2.x (Konnect)
+
+[Back to Contents](#contents)
+
+Kong AI Gateway 2.x introduces first-class entities — AI Models, MCP Servers, and AI
+Policies — that replace the traditional service/route/plugin approach for LLM and MCP
+traffic. AIDR plugins are deployed as AI Custom Policies and attached to these entities.
+
+The two key entities to understand:
+
+- **AI Custom Policy** — registers the plugin with Konnect. In installed mode, only the schema is uploaded (the handler is already on the DP). In streaming mode, both schema and handler are uploaded.
+- **AI Policy** — an instance of an AI Custom Policy with specific plugin configuration. Attached to AI Models (for LLM traffic) or MCP Servers (for MCP traffic).
+
+### Build image for AI Gateway 2.x
+
+[Back to Contents](#contents)
+
+Build the image with the AI Gateway base instead of the standard Kong Gateway image:
+
+```bash
+docker build --build-arg BASE_IMAGE=kong/kong-ai-gateway:latest -t kong-aidr-ai-gateway-2 .
+```
+
+### Installed custom policies on AI Gateway 2.x
+
+[Back to Contents](#contents)
+
+In installed mode, the plugin code ships with the data plane image. Konnect distributes
+only the plugin configuration to data planes — no handler upload is needed.
+
+#### Run the data plane
+
+```bash
+docker run -d --name kong \
+  -e KONG_DATABASE=off \
+  -e KONG_ROLE=data_plane \
+  -e KONG_KONNECT_MODE=on \
+  -e KONG_ROUTER_FLAVOR=expressions \
+  -e KONG_CLUSTER_CONTROL_PLANE=<cp-endpoint>:443 \
+  -e KONG_CLUSTER_MTLS=pki \
+  -e KONG_CLUSTER_CERT=<cert> \
+  -e KONG_CLUSTER_CERT_KEY=<key> \
+  -e KONG_PLUGINS=bundled,crowdstrike-aidr-request,crowdstrike-aidr-response,crowdstrike-aidr-mcp \
+  kong-aidr-ai-gateway-2
+```
+
+#### Register as installed AI Custom Policies
+
+For each plugin, upload the schema only (no handler):
+
+```bash
+AI_GATEWAY_URL="https://{region}.api.konghq.com/v1/ai-gateways/{AIGatewayId}"
+TOKEN="<konnect-token>"
+
+for plugin in crowdstrike-aidr-request crowdstrike-aidr-response crowdstrike-aidr-mcp; do
+  curl -sSL -X POST "$AI_GATEWAY_URL/custom-policies" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    --data-binary "{
+      \"name\": \"$plugin\",
+      \"type\": \"installed\",
+      \"schema\": $(jq -Rs . < dist/$plugin/schema.lua)
+    }"
+done
+```
+
+#### Create AI Policies
+
+Create an AI Policy for each plugin with your AIDR configuration. The `type` field
+must match the AI Custom Policy name registered above:
+
+```bash
+# Request plugin
+curl -sSL -X POST "$AI_GATEWAY_URL/policies" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "name": "aidr-request",
+    "type": "crowdstrike-aidr-request",
+    "enabled": true,
+    "global": false,
+    "config": {
+      "ai_guard_api_key": "<aidr-api-key>",
+      "ai_guard_api_base_url": "https://api.crowdstrike.com/aidr/aiguard",
+      "upstream_llm": {
+        "provider": "kong",
+        "api_uri": "/v1/chat/completions"
+      }
+    }
+  }'
+
+# Response plugin
+curl -sSL -X POST "$AI_GATEWAY_URL/policies" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "name": "aidr-response",
+    "type": "crowdstrike-aidr-response",
+    "enabled": true,
+    "global": false,
+    "config": {
+      "ai_guard_api_key": "<aidr-api-key>",
+      "ai_guard_api_base_url": "https://api.crowdstrike.com/aidr/aiguard",
+      "upstream_llm": {
+        "provider": "kong",
+        "api_uri": "/v1/chat/completions"
+      }
+    }
+  }'
+```
+
+#### Attach to an AI Model
+
+Add the AI Policy names to the `policies` array on your AI Model. The following
+`kongctl` declarative configuration example shows the full model definition:
+
+```yaml
+ai_gateway_models:
+  - ref: my-gpt-4o
+    ai_gateway: !lookup {id: !env AI_GATEWAY_ID}
+    name: my-gpt-4o
+    display_name: "my-gpt-4o"
+    type: model
+    formats:
+      - type: openai
+    config:
+      route:
+        paths:
+          - /v1
+        model:
+          body_param: model
+          values:
+            - my-gpt-4o
+    targets:
+      - name: gpt-4o
+        provider: generic-openai
+        config:
+          type: openai
+    policies:
+      - aidr-request
+      - aidr-response
+    capabilities:
+      - generate
+```
+
+### Streaming custom policies on AI Gateway 2.x
+
+[Back to Contents](#contents)
+
+In streaming mode, Konnect distributes both the schema and handler to data planes.
+No custom image is required — use the standard `kong/kong-ai-gateway:latest` image.
+
+#### Run the data plane
+
+```bash
+docker run -d --name kong \
+  -e KONG_DATABASE=off \
+  -e KONG_ROLE=data_plane \
+  -e KONG_KONNECT_MODE=on \
+  -e KONG_ROUTER_FLAVOR=expressions \
+  -e KONG_CLUSTER_CONTROL_PLANE=<cp-endpoint>:443 \
+  -e KONG_CLUSTER_MTLS=pki \
+  -e KONG_CLUSTER_CERT=<cert> \
+  -e KONG_CLUSTER_CERT_KEY=<key> \
+  -e KONG_PLUGINS=bundled \
+  -e KONG_UNTRUSTED_LUA=lax \
+  -e KONG_CUSTOM_PLUGIN_STREAMING_ENABLED=on \
+  kong/kong-ai-gateway:latest
+```
+
+#### Register as streaming AI Custom Policies
+
+Upload the `dist/` artifacts for each plugin (schema + handler):
+
+```bash
+AI_GATEWAY_URL="https://{region}.api.konghq.com/v1/ai-gateways/{AIGatewayId}"
+TOKEN="<konnect-token>"
+
+for plugin in crowdstrike-aidr-request crowdstrike-aidr-response crowdstrike-aidr-mcp; do
+  curl -sSL -X POST "$AI_GATEWAY_URL/custom-policies" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    --data-binary "{
+      \"name\": \"$plugin\",
+      \"type\": \"streaming\",
+      \"schema\": $(jq -Rs . < dist/$plugin/schema.lua),
+      \"handler\": $(jq -Rs . < dist/$plugin/handler.lua)
+    }"
+done
+```
+
+To update an existing streaming custom policy, use `PUT` with the full definition:
+
+```bash
+plugin="crowdstrike-aidr-request"
+curl -sSL -X PUT "$AI_GATEWAY_URL/custom-policies/$plugin" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-binary "{
+    \"name\": \"$plugin\",
+    \"type\": \"streaming\",
+    \"schema\": $(jq -Rs . < dist/$plugin/schema.lua),
+    \"handler\": $(jq -Rs . < dist/$plugin/handler.lua)
+  }"
+```
+
+Create AI Policies and attach them to AI Models using the same steps shown in the
+[installed mode example](#installed-custom-policies-on-ai-gateway-2x) above.
+
+### Known limitation: MCP plugin on AI Gateway 2.x
+
+> [!NOTE]
+> As of AI Gateway 2.3.1, `crowdstrike-aidr-mcp` does not execute on MCP Server
+> routes. The Konnect control plane generates an empty router condition expression
+> for custom policies associated with `passthrough-listener` MCP servers, so Kong's
+> expressions router never matches them. The LLM plugins (`crowdstrike-aidr-request`
+> and `crowdstrike-aidr-response`) are unaffected. A support ticket has been filed
+> with Kong.
 
 ## Example of use with MCP servers
 
