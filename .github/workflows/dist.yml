@@ -1,0 +1,43 @@
+name: dist
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build and lint dist artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # required for gh release upload on release events
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Build dist
+        run: make dist
+
+      - name: Lint schemas
+        run: make lint
+
+      - name: Upload dist artifacts (CI)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 30
+
+      - name: Attach dist to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd dist
+          for plugin in crowdstrike-aidr-request crowdstrike-aidr-response crowdstrike-aidr-mcp; do
+            zip -j "${plugin}-dist.zip" "${plugin}/handler.lua" "${plugin}/schema.lua"
+            gh release upload "$RELEASE_TAG" "${plugin}-dist.zip"
+          done
