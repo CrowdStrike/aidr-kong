@@ -1,8 +1,16 @@
 # Dockerfile for use Kong Gateway
 # with CrowdStrike AIDR plugins built from repository files
+#
+# Build for standard Kong Gateway (default):
+#   docker build -t kong-aidr .
+#
+# Build for Kong AI Gateway 2.x:
+#   docker build --build-arg BASE_IMAGE=kong/kong-ai-gateway:latest -t kong-aidr-ai-gateway-2 .
+
+ARG BASE_IMAGE=kong/kong-gateway:latest
 
 # Use the official Kong Gateway image as a base
-FROM kong/kong-gateway:latest
+FROM ${BASE_IMAGE}
 
 # Ensure any patching steps are executed as root user
 USER root
@@ -12,10 +20,10 @@ COPY ./kong /kong
 COPY ./kong-plugin-crowdstrike-aidr-*.rockspec /
 
 # Build from local rockspecs
-RUN luarocks make kong-plugin-crowdstrike-aidr-shared-*.rockspec \
-  && luarocks make kong-plugin-crowdstrike-aidr-request-*.rockspec \
-  && luarocks make kong-plugin-crowdstrike-aidr-response-*.rockspec \
-  && luarocks make kong-plugin-crowdstrike-aidr-mcp-*.rockspec
+RUN for rs in kong-plugin-crowdstrike-aidr-shared-*.rockspec; do luarocks make "$rs"; done \
+  && for rs in kong-plugin-crowdstrike-aidr-request-*.rockspec; do luarocks make "$rs"; done \
+  && for rs in kong-plugin-crowdstrike-aidr-response-*.rockspec; do luarocks make "$rs"; done \
+  && for rs in kong-plugin-crowdstrike-aidr-mcp-*.rockspec; do luarocks make "$rs"; done
 
 # Specify the plugins to be loaded by Kong,
 # including the default bundled plugins and the CrowdStrike AIDR plugins

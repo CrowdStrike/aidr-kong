@@ -1,6 +1,3 @@
-local typedefs = require("kong.db.schema.typedefs")
-local Schema = require("kong.db.schema")
-
 local AVAILABLE_TRANSLATORS = {
 	"anthropic",
 	"azureai",
@@ -11,19 +8,16 @@ local AVAILABLE_TRANSLATORS = {
 	"openai",
 }
 
-local secret = Schema.define {
-	type = "string",
-	referenceable = true,
-	encrypted = true,
-}
-
-local PLUGIN_NAME = "crowdstrike-aidr-request"
-
-local schema = {
-	name = PLUGIN_NAME,
+return {
+	name = "crowdstrike-aidr-request",
 	fields = {
 		{
-			protocols = typedefs.protocols_http,
+			protocols = {
+				type = "set",
+				required = true,
+				default = { "grpc", "grpcs", "http", "https" },
+				elements = { type = "string", one_of = { "grpc", "grpcs", "http", "https" } },
+			},
 		},
 		{
 			config = {
@@ -38,8 +32,11 @@ local schema = {
 						},
 					},
 					{
-						ai_guard_api_key = secret {
+						ai_guard_api_key = {
+							type = "string",
 							required = true,
+							referenceable = true,
+							encrypted = true,
 							description = "CrowdStrike AIDR API Key",
 						},
 					},
@@ -73,15 +70,6 @@ local schema = {
 									},
 								},
 							},
-							custom_validator = function(value)
-								-- api_uri validation against the translator is performed at runtime
-								-- in the handler, since the shared translator module is not available
-								-- at schema load time in Kong Konnect
-								if not value.provider or not value.api_uri then
-									return nil, "Both provider and api_uri are required"
-								end
-								return true
-							end,
 						},
 					},
 					{
@@ -89,7 +77,6 @@ local schema = {
 							type = "string",
 							required = false,
 							description = "Id of source application/agent",
-							default = ngx.null,
 						},
 					},
 					{
@@ -97,7 +84,6 @@ local schema = {
 							type = "string",
 							required = false,
 							description = "Static fallback user ID if an authenticated one is not available",
-							default = ngx.null,
 						},
 					},
 					{
@@ -105,7 +91,6 @@ local schema = {
 							type = "string",
 							required = false,
 							description = "Underlying LLM provider name (e.g. 'OpenAI', 'Anthropic')",
-							default = ngx.null,
 						},
 					},
 					{
@@ -113,7 +98,6 @@ local schema = {
 							type = "string",
 							required = false,
 							description = "Model used to perform the event (e.g. 'gpt-4')",
-							default = ngx.null,
 						},
 					},
 					{
@@ -121,7 +105,6 @@ local schema = {
 							type = "string",
 							required = false,
 							description = "Model version used to perform the event (e.g. '4')",
-							default = ngx.null,
 						},
 					},
 					{
@@ -129,7 +112,6 @@ local schema = {
 							type = "string",
 							required = false,
 							description = "Location of user or app or agent",
-							default = ngx.null,
 						},
 					},
 					{
@@ -137,7 +119,6 @@ local schema = {
 							type = "string",
 							required = false,
 							description = "For gateway-like integrations with multi-tenant support",
-							default = ngx.null,
 						},
 					},
 					{
@@ -145,7 +126,6 @@ local schema = {
 							type = "string",
 							required = false,
 							description = "AIDR collector instance id",
-							default = ngx.null,
 						},
 					},
 					{
@@ -155,7 +135,6 @@ local schema = {
 							description = "Additional metadata as key-value pairs",
 							keys = { type = "string" },
 							values = { type = "string" },
-							default = ngx.null,
 						},
 					},
 				},
@@ -163,5 +142,3 @@ local schema = {
 		},
 	},
 }
-
-return schema

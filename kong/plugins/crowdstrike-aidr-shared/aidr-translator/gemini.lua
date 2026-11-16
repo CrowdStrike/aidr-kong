@@ -25,13 +25,12 @@ local function convert_tools(gemini_tools)
 	return tools
 end
 
-local role_transform = {
-	["model"] = Model.AidrRoles.PromptRoleLlm,
-
-	__index = function(val)
-		return val
-	end,
-}
+local function transform_role(role)
+	if role == "model" then
+		return Model.AidrRoles.PromptRoleLlm
+	end
+	return role
+end
 
 local function prepare_chat_completions_request(request)
 	if type(request) ~= "table" then
@@ -51,7 +50,7 @@ local function prepare_chat_completions_request(request)
 	end
 
 	for idx, content in ipairs(request.contents) do
-		local role = role_transform(content.role)
+		local role = transform_role(content.role)
 		for jdx, part in ipairs(content.parts) do
 			local text = part.text
 			if text ~= nil then
@@ -80,7 +79,7 @@ local function prepare_chat_completions_response(response)
 
 	for idx, candidate in ipairs(response.candidates) do
 		for jdx, content in ipairs(candidate.content) do
-			local role = role_transform(content.role) or Model.AidrRoles.PromptRoleLlm
+			local role = transform_role(content.role) or Model.AidrRoles.PromptRoleLlm
 			for kdx, part in ipairs(content.parts) do
 				local text = part.text
 				if text ~= nil then

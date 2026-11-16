@@ -1,16 +1,3 @@
--- FieldMapping represents a mapping between CrowdStrike AIDR and input fields
-local FieldMapping = {
-	PangeaPath = "", -- Path in Pangea response
-	InputPath = "", -- Path in original input
-}
-
--- PangeaAiInput represents the input structure for CrowdStrike AIDR AI input
-local PangeaAiInput = {
-	messages = {}, -- Array of messages
-	model = "", -- Model name
-	version = "", -- Model version
-}
-
 -- Constants for roles
 local AidrRoles = {
 	PromptRoleSystem = "system",
@@ -18,48 +5,26 @@ local AidrRoles = {
 	PromptRoleLlm = "assistant",
 }
 
--- Helper function to create a new FieldMapping
-function FieldMapping.new(pangea_path, input_path)
-	local self = setmetatable({}, { __index = FieldMapping })
-	self.PangeaPath = pangea_path
-	self.InputPath = input_path
-	return self
-end
-
--- Helper function to create a new PangeaAiInput
-function PangeaAiInput.new(messages, model, version)
-	local self = setmetatable({}, { __index = PangeaAiInput })
-	self.messages = messages or {}
-	self.model = model or ""
-	self.version = version or ""
-	return self
-end
-
 ---@class JSONMessageMap
-local JSONMessageMap = {
-	messages = {},
-	lookup = {},
-	tools = nil, -- Optional: array of tool definitions in AIDR/OpenAI format
-}
+---@field messages table
+---@field lookup table
+---@field tools table?
 
 ---@alias PathElement string | integer
 
+---@param self JSONMessageMap
 ---@param content string
 ---@param role string
 ---@param path PathElement[]
 ---@param pos integer?
-function JSONMessageMap:add_message(content, role, path, pos)
+local function add_message(self, content, role, path, pos)
 	if pos ~= nil then
-		-- TODO: Remove the "content" field -- we should be able to pass in the original table and the path instead
-		-- Getting the content from the path instead seems a bit more robust to me
 		table.insert(self.messages, pos, {
 			content = content,
 			role = role,
 		})
 		table.insert(self.lookup, pos, path)
 	else
-		-- TODO: Remove the "content" field -- we should be able to pass in the original table and the path instead
-		-- Getting the content from the path instead seems a bit more robust to me
 		table.insert(self.messages, {
 			content = content,
 			role = role,
@@ -68,21 +33,16 @@ function JSONMessageMap:add_message(content, role, path, pos)
 	end
 end
 
--- TODO: I think this is a bit funky, but it's the most straight forward way I found to
--- keep my type-checker happy
 local function NewJSONMessageMap()
-	local self = {
+	return {
 		messages = {},
 		lookup = {},
 		tools = nil,
+		add_message = add_message,
 	}
-	setmetatable(self, { __index = JSONMessageMap })
-	return self
 end
 
 return {
-	FieldMapping = FieldMapping,
-	PangeaAiInput = PangeaAiInput,
 	AidrRoles = AidrRoles,
 	NewJSONMessageMap = NewJSONMessageMap,
 }

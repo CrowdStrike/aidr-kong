@@ -1,12 +1,14 @@
 local cjson = require("cjson.safe")
 local http = require("resty.http")
 
+local PLUGIN_VERSION = "0.8.0"
+
 local CrowdStrikeAIDRMcpPlugin = {
 	-- Must run before ai-mcp-proxy (PRIORITY 820) in the access phase so we can
 	-- inject the required Accept header and inspect tool_input before the tool
 	-- executes.
 	PRIORITY = 950,
-	VERSION = "0.8.0",
+	VERSION = PLUGIN_VERSION,
 }
 
 -- Key used to pass state from the access phase to the response phase.
@@ -135,6 +137,7 @@ local function call_aidr(config, event_type, guard_input)
 		headers = {
 			["Authorization"] = "Bearer " .. config.ai_guard_api_key,
 			["Content-Type"]  = "application/json",
+			["User-Agent"]    = "aidr-kong-" .. PLUGIN_VERSION,
 		},
 	})
 

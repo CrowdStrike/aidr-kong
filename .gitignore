@@ -13,3 +13,6 @@ luacov.report.html
 # exclude Pongo containerid file
 .containerid
 .local
+.DS_Store
+# exclude generated dist artifacts (built by `make dist`, attached to releases)
+dist/

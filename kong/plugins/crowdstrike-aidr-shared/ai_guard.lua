@@ -2,6 +2,9 @@ local cjson = require("cjson.safe")
 local http = require("resty.http")
 local translate = require("kong.plugins.crowdstrike-aidr-shared.aidr-translator")
 
+local PLUGIN_VERSION = "0.8.0"
+local USER_AGENT = "aidr-kong-" .. PLUGIN_VERSION
+
 local internalError = {
 	status = "Internal server error",
 }
@@ -36,7 +39,8 @@ local function call_ai_guard(config, url, raw_body)
 		body = raw_body,
 		headers = {
 			["Authorization"] = "Bearer " .. config.ai_guard_api_key,
-			["Content-Type"] = "application/json",
+			["Content-Type"]  = "application/json",
+			["User-Agent"]    = USER_AGENT,
 		},
 	})
 
