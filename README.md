@@ -43,6 +43,7 @@ All detections are logged for analysis, attribution, and incident response.
   - [Test MCP traffic inspection](#test-mcp-traffic-inspection)
   - [Using with Kong AI MCP Proxy](#using-with-kong-ai-mcp-proxy)
 - [LLM support](#llm-support)
+  - [OpenAI Responses API](#openai-responses-api)
 - [Contributing](#contributing)
 
 ## Prerequisites
@@ -107,7 +108,7 @@ parameters:
     - `gemini` - Google Gemini
     - `kong` - Kong AI Gateway
     - `openai` - OpenAI
-  - **api_uri** _(string, required)_ - Path to the LLM endpoint (for example, `/v1/chat/completions`)
+  - **api_uri** _(string, required)_ - Path to the LLM endpoint (for example, `/v1/chat/completions` or `/v1/responses`). See [LLM support](#llm-support) for the paths supported by each provider.
 - **app_id** _(string, optional)_ - Id of source application/agent
 - **user_id** _(string, optional)_ - Static fallback user ID if an authenticated one is not available
 - **llm_provider** _(string, optional)_ - Underlying LLM provider name (e.g. 'OpenAI', 'Anthropic')
@@ -864,6 +865,55 @@ The following providers are supported, along with their corresponding `provider`
 
 > [!NOTE]
 > Streaming responses are not currently supported.
+
+### OpenAI Responses API
+
+[Back to Contents](#contents)
+
+The OpenAI [Responses API](https://platform.openai.com/docs/api-reference/responses) is supported with the following `api_uri` values:
+
+- OpenAI (`provider: openai`) - `/v1/responses`
+- Azure OpenAI (`provider: azureai`) - `/responses`
+
+Requests are mapped onto the same messages AIDR receives for Chat Completions:
+
+- `instructions` and `input` text (string input, or `input_text` / `output_text` content parts) are inspected and can be redacted.
+- Function, custom tool, and MCP tool outputs are inspected as `tool` messages and can be redacted. The tool calls themselves are passed through unchanged.
+- Function tool definitions are forwarded to AIDR. Built-in tools, images, files, and reasoning items are not inspected.
+
+In responses, only the `output_text` content of `message` output items is inspected.
+
+```yaml title="Example declarative configuration for the Responses API"
+...
+
+services:
+  - name: openai-responses-service
+    url: https://api.openai.com/v1/responses
+    routes:
+      - name: openai-responses-route
+        # Exact match; with strip_path (default true) the upstream path is the service URL path.
+        paths: ["~/openai/v1/responses$"]
+    plugins:
+      - name: crowdstrike-aidr-request
+        config:
+          ai_guard_api_key: "{vault://env-cs-aidr/token}"
+          upstream_llm:
+            provider: "openai"
+            api_uri: "/v1/responses"
+      - name: crowdstrike-aidr-response
+        config:
+          ai_guard_api_key: "{vault://env-cs-aidr/token}"
+          upstream_llm:
+            provider: "openai"
+            api_uri: "/v1/responses"
+
+...
+```
+
+> [!NOTE]
+> Use an exact (regex) route path as shown above. Kong matches route paths by prefix, so a plain `/v1/responses` route also matches endpoints such as `GET /v1/responses/{id}/input_items`, whose responses are not Responses objects and will be rejected by the response plugin.
+>
+> When a request uses `previous_response_id` or `conversation`, earlier turns are stored by OpenAI and only the new `input` is visible to the gateway. Each turn is inspected as it passes through the gateway.
 
 ## Contributing
 

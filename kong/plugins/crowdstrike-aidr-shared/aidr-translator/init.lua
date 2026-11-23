@@ -31,7 +31,7 @@ function translate.rewrite_llm_message(original, message_mapping, new_messages)
 
 	for idx, prompt_message in ipairs(new_messages) do
 		local this_message_lookup = message_mapping.lookup[idx]
-		if this_message_lookup == nil then
+		if not this_message_lookup then
 			-- No rewrite path: context-only message (e.g. assistant tool_calls).
 			-- Leave the original body untouched at this position.
 		else
