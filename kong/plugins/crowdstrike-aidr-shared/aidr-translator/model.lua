@@ -44,11 +44,14 @@ local JSONMessageMap = {
 
 ---@alias PathElement string | integer
 
----@param content string
+---@param content string?
 ---@param role string
----@param path PathElement[]
+---@param path PathElement[]? nil for context-only messages that must never be rewritten
 ---@param pos integer?
 function JSONMessageMap:add_message(content, role, path, pos)
+	-- Store `false` instead of nil so `lookup` stays index-aligned with `messages`;
+	-- table.insert(t, nil) is a no-op and would shift every later path by one.
+	path = path or false
 	if pos ~= nil then
 		-- TODO: Remove the "content" field -- we should be able to pass in the original table and the path instead
 		-- Getting the content from the path instead seems a bit more robust to me

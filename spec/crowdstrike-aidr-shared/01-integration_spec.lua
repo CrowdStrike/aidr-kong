@@ -49,8 +49,30 @@ for _, strategy in helpers.each_strategy() do
 					if test_input.expected_tools then
 						assert.are.same(test_input.expected_tools, messages.tools)
 					end
+
+					if test_input.expected_messages then
+						assert.are.same(test_input.expected_messages, messages.messages)
+					end
 				end)
 			end
+		end)
+
+		describe("OpenAI Responses API", function()
+			it("rejects response bodies that are not a response object", function()
+				local instance = translate.get_translator("openai")
+				-- e.g. GET /v1/responses/{id}/input_items
+				local messages, err = instance["/v1/responses"].response({ object = "list", data = {} })
+				assert.is_nil(messages)
+				assert.equal("Invalid response object", err)
+			end)
+
+			it("skips responses without output (background / queued)", function()
+				local instance = translate.get_translator("openai")
+				local messages, err =
+					instance["/v1/responses"].response({ object = "response", status = "queued", output = {} })
+				assert.falsy(err)
+				assert.equal(0, #messages.messages)
+			end)
 		end)
 	end)
 end

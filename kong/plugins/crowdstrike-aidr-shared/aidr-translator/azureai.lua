@@ -5,6 +5,10 @@ local AzureAITranslator = {
 		["request"] = OpenAiTranslator["/v1/chat/completions"].request,
 		["response"] = OpenAiTranslator["/v1/chat/completions"].response,
 	},
+	["/responses"] = {
+		["request"] = OpenAiTranslator["/v1/responses"].request,
+		["response"] = OpenAiTranslator["/v1/responses"].response,
+	},
 }
 
 return AzureAITranslator
