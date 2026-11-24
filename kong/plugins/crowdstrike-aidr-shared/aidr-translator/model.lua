@@ -20,19 +20,19 @@ local AidrRoles = {
 
 -- Helper function to create a new FieldMapping
 function FieldMapping.new(pangea_path, input_path)
-	local self = setmetatable({}, { __index = FieldMapping })
-	self.PangeaPath = pangea_path
-	self.InputPath = input_path
-	return self
+	return {
+		PangeaPath = pangea_path,
+		InputPath = input_path,
+	}
 end
 
 -- Helper function to create a new PangeaAiInput
 function PangeaAiInput.new(messages, model, version)
-	local self = setmetatable({}, { __index = PangeaAiInput })
-	self.messages = messages or {}
-	self.model = model or ""
-	self.version = version or ""
-	return self
+	return {
+		messages = messages or {},
+		model = model or "",
+		version = version or "",
+	}
 end
 
 ---@class JSONMessageMap
@@ -70,14 +70,17 @@ end
 
 -- TODO: I think this is a bit funky, but it's the most straight forward way I found to
 -- keep my type-checker happy
+--
+-- The method is assigned to the instance instead of using setmetatable(self, { __index = JSONMessageMap }).
+-- Kong's streamed custom plugin sandbox (for example on a Konnect-managed data plane) does not expose
+-- `setmetatable`, and a managed data plane cannot allow it through KONG_UNTRUSTED_LUA_SANDBOX_ENVIRONMENT.
 local function NewJSONMessageMap()
-	local self = {
+	return {
 		messages = {},
 		lookup = {},
 		tools = nil,
+		add_message = JSONMessageMap.add_message,
 	}
-	setmetatable(self, { __index = JSONMessageMap })
-	return self
 end
 
 return {
